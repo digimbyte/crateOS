@@ -1,6 +1,6 @@
 # CrateOS
 
-![CrateOS](assets/CrateOS.png)
+<img src="assets/CrateOS.png" alt="CrateOS" width="360" />
 
 A curated, appliance-style server platform built on **Ubuntu Server LTS**.
 
