@@ -1,0 +1,10 @@
+[Unit]
+Description=CrateOS Policy — drift detection and repair
+After=crateos-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/crateos-policy
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crateos-policy

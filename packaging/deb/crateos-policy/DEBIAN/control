@@ -1,0 +1,8 @@
+Package: crateos-policy
+Version: 0.1.0
+Architecture: amd64
+Maintainer: CrateOS <crateos@localhost>
+Description: CrateOS Policy — periodic drift detection and repair
+ Oneshot service triggered by a systemd timer to verify that the CrateOS
+ platform is in the expected state and report/repair any drift.
+Depends: crateos-agent

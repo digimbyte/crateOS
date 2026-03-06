@@ -1,0 +1,81 @@
+# CrateOS package policy
+# Required packages are installed at OS install time.
+# Optional packages are installed only when a module/service is enabled.
+
+required:
+  # Core platform
+  - openssh-server
+  - network-manager
+  - nftables
+  - openssl
+  - ca-certificates
+
+  # Base utilities
+  - curl
+  - wget
+  - jq
+  - yq
+  - git
+  - rsync
+  - dos2unix
+  - lsof
+
+  # Time/updates/maintenance
+  - chrony
+  - unattended-upgrades
+  - needrestart
+  - logrotate
+
+  # Diagnostics & hardware
+  - btop
+  - ncdu
+  - smartmontools
+  - nvme-cli
+  - lm-sensors
+  - fancontrol
+  - hddtemp
+  - iperf3
+  - ethtool
+  - iw
+  - dnsutils
+  - mtr-tiny
+  - pciutils
+  - usbutils
+
+  # Security & access
+  - fail2ban
+  - wireguard
+
+  # Ops tooling
+  - tmux
+  - build-essential
+  - pkg-config
+  - python3
+  - python3-venv
+  - python3-pip
+  - powershell
+
+optional:
+  # UI / local UX (opt-in)
+  - lightdm
+  - cockpit
+
+  # Web hosting / reverse proxy (opt-in)
+  - nginx
+
+  # Containers (opt-in)
+  - docker.io
+  - docker-compose-plugin
+
+  # Databases / data services (opt-in)
+  - postgres
+
+  # Email / alerts (opt-in)
+  - msmtp
+
+  # VPN / tunnels (opt-in)
+  - wireguard
+  - cloudflared
+
+  # Terminal extras (opt-in)
+  - screen

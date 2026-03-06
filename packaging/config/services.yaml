@@ -1,0 +1,28 @@
+# CrateOS service registry
+# Declares which modules are enabled and their runtime options.
+
+services:
+  - name: "nginx"
+    enabled: true
+    runtime: "systemd"     # systemd | docker
+    autostart: true
+
+  - name: "docker"
+    enabled: true
+    runtime: "systemd"
+    autostart: true
+
+  # - name: "postgres"
+  #   enabled: false
+  #   runtime: "docker"
+  #   autostart: false
+  #   options:
+  #     version: "16"
+  #     data_dir: "/srv/crateos/services/postgres/data"
+
+  # - name: "cloudflared"
+  #   enabled: false
+  #   runtime: "systemd"
+  #   autostart: false
+  #   options:
+  #     tunnel_token: ""

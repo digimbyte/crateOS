@@ -1,0 +1,140 @@
+name: CrateOS Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Version override (e.g. 0.1.0)'
+        required: false
+
+env:
+  GO_VERSION: '1.22'
+
+jobs:
+  build-deb:
+    name: Build .deb packages (amd64)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binaries
+        run: make build
+
+      - name: Build .deb packages
+        run: make deb VERSION=${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Upload .deb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-packages
+          path: dist/*.deb
+
+  build-iso:
+    name: Build autoinstall ISO (amd64)
+    needs: build-deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install ISO tools
+        run: sudo apt-get update && sudo apt-get install -y xorriso p7zip-full wget
+
+      - name: Download .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages
+          path: dist/
+
+      - name: Build binaries
+        run: make build
+
+      - name: Build ISO
+        run: make iso VERSION=${{ github.event.inputs.version || github.ref_name }}
+        env:
+          ISO_MODE: offline-lite
+
+      - name: Upload ISO artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: iso-image
+          path: dist/*.iso
+
+  build-qcow2:
+    name: Build qcow2 VM image (amd64)
+    needs: build-deb
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install qcow2 tools
+        run: sudo apt-get update && sudo apt-get install -y qemu-utils cloud-image-utils wget
+
+      - name: Download .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages
+          path: dist/
+
+      - name: Build binaries
+        run: make build
+
+      - name: Build qcow2
+        run: make qcow2 VERSION=${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Upload qcow2 artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: qcow2-image
+          path: dist/*.qcow2
+
+  build-rpi:
+    name: Build Raspberry Pi image (arm64)
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "rpi target not yet implemented — stub job"
+
+  release:
+    name: Create GitHub Release
+    needs: [build-deb, build-iso, build-qcow2]
+    runs-on: ubuntu-latest
+    if: startsWith(github.ref, 'refs/tags/v')
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts/
+
+      - name: Generate checksums
+        run: |
+          cd artifacts
+          find . -type f \( -name '*.deb' -o -name '*.iso' -o -name '*.qcow2' \) -exec sha256sum {} + > checksums-sha256.txt
+          cat checksums-sha256.txt
+
+      - name: Create release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          files: |
+            artifacts/**/*.deb
+            artifacts/**/*.iso
+            artifacts/**/*.qcow2
+            artifacts/checksums-sha256.txt

@@ -1,0 +1,36 @@
+# CrateOS network policy
+# NetworkManager profiles are system-owned and headless-safe.
+# Profiles bind by MAC address, not interface name.
+
+manager: "networkmanager"
+
+profiles:
+  - name: "LAN"
+    type: "ethernet"
+    # mac: ""              # Set to your ethernet NIC MAC
+    method: "auto"         # auto (DHCP) | manual (static)
+    metric: 100            # lower = preferred route
+    autoconnect: true
+    # static:              # only used when method: manual
+    #   address: "192.168.1.10/24"
+    #   gateway: "192.168.1.1"
+    #   dns:
+    #     - "1.1.1.1"
+    #     - "8.8.8.8"
+
+  - name: "WIFI"
+    type: "wifi"
+    # mac: ""              # Set to your wifi NIC MAC
+    # ssid: ""
+    # password: ""         # stored as system connection (not keyring)
+    method: "auto"
+    metric: 600            # higher = secondary route
+    autoconnect: true
+
+dns:
+  fallback:
+    - "1.1.1.1"
+    - "8.8.8.8"
+
+# Self-healing: agent repairs broken profiles on drift detection
+self_heal: true

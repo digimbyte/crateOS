@@ -1,0 +1,8 @@
+Package: crateos-agent
+Version: 0.1.0
+Architecture: amd64
+Maintainer: CrateOS <crateos@localhost>
+Description: CrateOS Agent — platform state enforcer daemon
+ Long-running service that ensures /srv/crateos filesystem layout exists,
+ writes the installed marker, and applies desired state idempotently.
+Depends: crateos

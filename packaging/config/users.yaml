@@ -1,0 +1,52 @@
+# CrateOS user roles and permissions
+# Inspired by Bukkit-style permission nodes.
+
+roles:
+  admin:
+    description: "Full platform access including break-glass shell"
+    permissions:
+      - "*"
+
+  operator:
+    description: "Manage services, network, and logs"
+    permissions:
+      - "svc.*"
+      - "net.*"
+      - "proxy.*"
+      - "logs.view"
+      - "logs.export"
+      - "system.status"
+      - "system.maintenance"
+
+  viewer:
+    description: "Read-only access to status and logs"
+    permissions:
+      - "system.status"
+      - "logs.view"
+      - "svc.list"
+      - "net.status"
+
+# System users and their role assignments
+users:
+  - name: "crate"
+    role: "admin"
+    # This is the default user created by the installer.
+
+# Permission nodes reference:
+#   system.status        - view system dashboard
+#   system.maintenance   - run cleanup/maintenance tasks
+#   svc.*                - all service operations
+#   svc.list             - list services
+#   svc.start            - start services
+#   svc.stop             - stop services
+#   svc.restart          - restart services
+#   svc.install          - install new modules
+#   svc.uninstall        - remove modules
+#   net.*                - all network operations
+#   net.status           - view network status
+#   net.configure        - modify network config
+#   proxy.*              - all reverse proxy operations
+#   logs.view            - browse logs
+#   logs.export          - export/download logs
+#   fw.*                 - firewall management
+#   shell.breakglass     - escape to raw shell

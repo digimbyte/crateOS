@@ -1,0 +1,32 @@
+# CrateOS Module: nginx
+name: "nginx"
+description: "Reverse proxy and static file server"
+version: "latest"
+runtime: "systemd"
+
+install:
+  packages:
+    - "nginx"
+  directories:
+    - "/srv/crateos/services/nginx/config"
+    - "/srv/crateos/services/nginx/data"
+    - "/srv/crateos/services/nginx/logs"
+
+systemd:
+  service: "nginx"
+  enabled: true
+
+config_files:
+  - source: "reverse-proxy.yaml"
+    generates: "/etc/nginx/sites-enabled/crateos-proxy.conf"
+
+health:
+  check: "curl -sf http://127.0.0.1/ > /dev/null"
+  interval: "30s"
+
+exports:
+  - "/etc/nginx"
+
+uninstall:
+  purge_packages: true
+  remove_data: false       # prompt user before deleting data

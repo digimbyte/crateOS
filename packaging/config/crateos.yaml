@@ -1,0 +1,29 @@
+# CrateOS global platform configuration
+# This is the primary config file read by crateos-agent.
+
+version: "0.1.0"
+
+platform:
+  hostname: "crateos"
+  timezone: "UTC"
+  locale: "en_US.UTF-8"
+
+crate_root: "/srv/crateos"
+
+# Log level for agent and policy: debug, info, warn, error
+log_level: "info"
+
+# Auto-update policy for CrateOS packages
+updates:
+  enabled: true
+  channel: "stable"        # stable | nightly
+  auto_apply: false        # if true, agent applies updates without confirmation
+  check_interval: "6h"
+
+# Maintenance windows
+maintenance:
+  cleanup_enabled: true
+  journal_vacuum_size: "500M"
+  journal_vacuum_time: "7d"
+  docker_prune: true
+  cache_cleanup: true      # apt, pip, npm caches

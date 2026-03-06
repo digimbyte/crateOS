@@ -1,0 +1,18 @@
+#!/bin/bash
+set -e
+
+CRATE_ROOT="/srv/crateos"
+
+# Idempotent: create the canonical directory structure.
+for dir in config modules services state state/last-good state/backups logs export bin; do
+    mkdir -p "${CRATE_ROOT}/${dir}"
+done
+
+# Install and start the systemd service.
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+    systemctl enable crateos-agent.service
+    systemctl start crateos-agent.service
+fi
+
+echo "crateos-agent: installed and started"

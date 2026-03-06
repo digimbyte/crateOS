@@ -1,0 +1,39 @@
+# CrateOS Module: docker
+name: "docker"
+description: "Container runtime engine with compose plugin"
+version: "latest"
+runtime: "systemd"
+
+install:
+  packages:
+    - "docker-ce"
+    - "docker-ce-cli"
+    - "containerd.io"
+    - "docker-compose-plugin"
+  repositories:
+    - name: "docker"
+      url: "https://download.docker.com/linux/ubuntu"
+      key: "https://download.docker.com/linux/ubuntu/gpg"
+      suite: "noble"
+      component: "stable"
+  directories:
+    - "/srv/crateos/services/docker/config"
+    - "/srv/crateos/services/docker/data"
+
+systemd:
+  service: "docker"
+  enabled: true
+  socket: "docker.socket"
+
+health:
+  check: "docker info > /dev/null 2>&1"
+  interval: "60s"
+
+maintenance:
+  prune_images: true
+  prune_volumes: false     # dangerous — off by default
+  prune_networks: true
+
+uninstall:
+  purge_packages: true
+  remove_data: false

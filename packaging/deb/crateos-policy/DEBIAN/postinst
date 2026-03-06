@@ -1,0 +1,11 @@
+#!/bin/bash
+set -e
+
+# Install and enable the policy timer.
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+    systemctl enable crateos-policy.timer
+    systemctl start crateos-policy.timer
+fi
+
+echo "crateos-policy: timer installed and started"

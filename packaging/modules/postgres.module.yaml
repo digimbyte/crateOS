@@ -1,0 +1,40 @@
+# CrateOS Module: postgres
+name: "postgres"
+description: "PostgreSQL database server (containerized)"
+version: "16"
+runtime: "docker"
+
+install:
+  depends:
+    - "docker"
+  image: "postgres:16"
+  directories:
+    - "/srv/crateos/services/postgres/config"
+    - "/srv/crateos/services/postgres/data"
+    - "/srv/crateos/services/postgres/logs"
+
+compose:
+  file: "/srv/crateos/services/postgres/docker-compose.yaml"
+  template: |
+    services:
+      postgres:
+        image: postgres:16
+        restart: unless-stopped
+        environment:
+          POSTGRES_PASSWORD_FILE: /run/secrets/pg_password
+        volumes:
+          - /srv/crateos/services/postgres/data:/var/lib/postgresql/data
+        ports:
+          - "127.0.0.1:5432:5432"
+        healthcheck:
+          test: ["CMD-SHELL", "pg_isready -U postgres"]
+          interval: 10s
+          timeout: 5s
+          retries: 5
+
+health:
+  check: "docker exec crateos-postgres pg_isready -U postgres"
+  interval: "30s"
+
+uninstall:
+  remove_data: false       # always prompt — database data is critical

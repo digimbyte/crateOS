@@ -1,0 +1,33 @@
+# CrateOS reverse proxy configuration (nginx)
+# Agent generates nginx server blocks from these mappings.
+
+enabled: true
+
+# Global defaults
+defaults:
+  listen_http: 80
+  listen_https: 443
+  ssl: false               # enable once ACME/TLS is configured
+  # ssl_cert: ""
+  # ssl_key: ""
+
+# Service mappings: route incoming requests to backend services
+mappings: []
+  # Example:
+  # - name: "my-app"
+  #   hostname: "app.example.com"
+  #   target: "http://127.0.0.1:3000"
+  #   path: "/"
+  #   ssl: false
+  #   headers:
+  #     X-Forwarded-Proto: "$scheme"
+  #     X-Real-IP: "$remote_addr"
+
+# Health check settings
+health_check:
+  enabled: true
+  interval: "30s"
+  timeout: "5s"
+
+# Safety: always run nginx -t before applying
+validate_before_apply: true

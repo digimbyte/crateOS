@@ -1,0 +1,15 @@
+#!/bin/bash
+set -e
+
+# Deploy SSH forced-command configuration.
+mkdir -p /etc/ssh/sshd_config.d
+cp /etc/ssh/sshd_config.d/10-crateos.conf /etc/ssh/sshd_config.d/10-crateos.conf 2>/dev/null || true
+
+# Restart sshd to pick up ForceCommand.
+if systemctl is-active --quiet sshd; then
+    systemctl restart sshd
+elif systemctl is-active --quiet ssh; then
+    systemctl restart ssh
+fi
+
+echo "crateos: installed successfully"
