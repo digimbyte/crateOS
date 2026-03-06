@@ -1,5 +1,7 @@
 # CrateOS
 
+![CrateOS](assets/CrateOS.png)
+
 A curated, appliance-style server platform built on **Ubuntu Server LTS**.
 
 CrateOS replaces shell-first administration with a **Pitboy/DOS choose-your-adventure console** (SSH/TUI) and an optional web panel. Everything users care about lives under a single canonical root: **`/srv/crateos`**.
