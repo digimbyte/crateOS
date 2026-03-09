@@ -1,32 +1,33 @@
-# CrateOS Module: nginx
-name: "nginx"
-description: "Reverse proxy and static file server"
-version: "latest"
-runtime: "systemd"
-
-install:
+apiVersion: crateos/v1
+kind: Module
+metadata:
+  id: nginx
+  name: Nginx
+  category: proxy
+  version: "1.0.0"
+  description: Managed nginx reverse proxy
+spec:
+  runtimeType: systemd
+  installMode: immediate
   packages:
-    - "nginx"
-  directories:
-    - "/srv/crateos/services/nginx/config"
-    - "/srv/crateos/services/nginx/data"
-    - "/srv/crateos/services/nginx/logs"
-
-systemd:
-  service: "nginx"
-  enabled: true
-
-config_files:
-  - source: "reverse-proxy.yaml"
-    generates: "/etc/nginx/sites-enabled/crateos-proxy.conf"
-
-health:
-  check: "curl -sf http://127.0.0.1/ > /dev/null"
-  interval: "30s"
-
-exports:
-  - "/etc/nginx"
-
-uninstall:
-  purge_packages: true
-  remove_data: false       # prompt user before deleting data
+    - nginx
+  units:
+    - nginx.service
+  paths:
+    config:
+      canonical: /srv/crateos/services/nginx/config
+      native: /etc/nginx
+    logs:
+      canonical: /srv/crateos/services/nginx/logs
+      native: /var/log/nginx
+  network:
+    ports:
+      - name: http
+        port: 80
+        protocol: tcp
+      - name: https
+        port: 443
+        protocol: tcp
+  healthChecks:
+    - type: command
+      command: nginx -t

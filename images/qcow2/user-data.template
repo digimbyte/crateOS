@@ -1,0 +1,24 @@
+#cloud-config
+hostname: __HOSTNAME__
+ssh_pwauth: true
+users:
+  - name: __DEFAULT_USER__
+    sudo: ALL=(ALL) NOPASSWD:ALL
+    shell: /bin/bash
+    lock_passwd: false
+    passwd: "__PASSWORD_HASH__"
+package_update: true
+package_upgrade: false
+packages:
+__REQUIRED_PACKAGES__
+runcmd:
+  - |
+    echo "==> Installing CrateOS debs from /var/tmp/crateos-debs"
+    if ! ls /var/tmp/crateos-debs/*.deb >/dev/null 2>&1; then
+      echo "CrateOS debs missing from /var/tmp/crateos-debs"
+      exit 1
+    fi
+    dpkg -i /var/tmp/crateos-debs/*.deb || apt-get -f install -y
+    chage -d 0 __DEFAULT_USER__
+    /usr/local/bin/verify-bootstrap-artifacts
+    /usr/local/bin/verify-mvp-install

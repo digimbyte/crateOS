@@ -1,8 +1,9 @@
 Package: crateos
-Version: 0.1.0
+Version: 0.1.0+noble1
 Architecture: amd64
 Maintainer: CrateOS <crateos@localhost>
 Description: CrateOS CLI and TUI console
  Interactive console and CLI for the CrateOS appliance-style server platform.
  Provides the 'crateos' command with console, status, and version subcommands.
-Depends: openssh-server
+ Built for Ubuntu 24.04 (noble) baseline.
+Depends: openssh-server, dos2unix

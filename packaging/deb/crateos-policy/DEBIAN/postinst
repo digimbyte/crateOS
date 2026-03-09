@@ -1,10 +1,13 @@
 #!/bin/bash
 set -e
 
-# Install and enable the policy timer.
+# Persist timer enablement for offline/chroot installs as well as live systems.
+mkdir -p /etc/systemd/system/timers.target.wants
+ln -sf /lib/systemd/system/crateos-policy.timer /etc/systemd/system/timers.target.wants/crateos-policy.timer
+
+# Start immediately when systemd is live on the current host.
 if [ -d /run/systemd/system ]; then
     systemctl daemon-reload
-    systemctl enable crateos-policy.timer
     systemctl start crateos-policy.timer
 fi
 

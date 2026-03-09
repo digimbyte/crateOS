@@ -2,9 +2,13 @@ package main
 
 import (
 	"fmt"
+	"github.com/crateos/crateos/internal/api"
+	"github.com/crateos/crateos/internal/config"
 	"log"
 	"os"
+	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/crateos/crateos/internal/platform"
@@ -23,6 +27,14 @@ func main() {
 			printVersion()
 		case "status":
 			printStatus()
+		case "bootstrap":
+			handleBootstrapCmd(os.Args[2:])
+		case "service":
+			handleServiceCmd(os.Args[2:])
+		case "user":
+			handleUserCmd(os.Args[2:])
+		case "backup":
+			handleBackupCmd(os.Args[2:])
 		default:
 			fmt.Fprintf(os.Stderr, "unknown command: %s\n", os.Args[1])
 			printUsage()
@@ -40,6 +52,14 @@ func printUsage() {
 	fmt.Println("  crateos console   Enter the CrateOS interactive console")
 	fmt.Println("  crateos status    Show system status summary")
 	fmt.Println("  crateos version   Print version information")
+	fmt.Println("  crateos bootstrap <name>                Create first admin when users are missing")
+	fmt.Println("  crateos service enable|disable|start|stop <name>   Manage services")
+	fmt.Println("  crateos user add <name> <role>          Add a user with role")
+	fmt.Println("  crateos user del <name>                 Delete a user")
+	fmt.Println("  crateos user rename <old> <new>         Rename a user")
+	fmt.Println("  crateos user set-role <name> <role>     Set a user's role")
+	fmt.Println("  crateos user set-perms <name> <p1,p2>   Replace a user's permissions list")
+	fmt.Println("  crateos backup [out.tar.gz]             Backup config + services state/data")
 }
 
 func printVersion() {
@@ -62,5 +82,156 @@ func printStatus() {
 		fmt.Println("  Installed:  yes")
 	} else {
 		fmt.Println("  Installed:  no")
+	}
+}
+
+func resolveCLIUser() string {
+	cfg, err := config.Load()
+	if err != nil {
+		return ""
+	}
+	if len(cfg.Users.Users) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(cfg.Users.Users[0].Name)
+}
+
+func requireCLIUser() string {
+	user := resolveCLIUser()
+	if user == "" {
+		fmt.Fprintln(os.Stderr, "no configured operator found; run: crateos bootstrap <name>")
+		os.Exit(1)
+	}
+	return user
+}
+
+func handleBootstrapCmd(args []string) {
+	if len(args) < 1 || strings.TrimSpace(args[0]) == "" {
+		fmt.Println("usage: crateos bootstrap <name>")
+		os.Exit(1)
+	}
+	if err := api.NewClient("").Bootstrap(strings.TrimSpace(args[0])); err != nil {
+		fmt.Fprintf(os.Stderr, "bootstrap failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("bootstrap complete")
+}
+func handleBackupCmd(args []string) {
+	if runtime.GOOS != "linux" {
+		fmt.Println("backup only supported on Linux host")
+		os.Exit(1)
+	}
+	out := "crateos-backup.tar.gz"
+	if len(args) >= 1 {
+		out = args[0]
+	}
+	cmd := exec.Command("tar", "-czf", out,
+		platform.CratePath("config"),
+		platform.CratePath("services"),
+		platform.CratePath("state"),
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		fmt.Fprintf(os.Stderr, "backup failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Printf("backup written to %s\n", out)
+}
+
+func handleServiceCmd(args []string) {
+	if len(args) < 2 {
+		fmt.Println("usage: crateos service enable|disable|start|stop <name>")
+		os.Exit(1)
+	}
+	action, name := args[0], args[1]
+	client := api.NewClient(requireCLIUser())
+	var err error
+	switch action {
+	case "enable":
+		err = client.EnableService(name)
+	case "disable":
+		err = client.DisableService(name)
+	case "start":
+		err = client.StartService(name)
+	case "stop":
+		err = client.StopService(name)
+	default:
+		fmt.Println("usage: crateos service enable|disable|start|stop <name>")
+		os.Exit(1)
+	}
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "service %s failed: %v\n", action, err)
+		os.Exit(1)
+	}
+	fmt.Printf("service %s %s\n", name, action)
+}
+
+func handleUserCmd(args []string) {
+	if len(args) < 2 {
+		fmt.Println("usage: crateos user add <name> <role> | crateos user del <name> | crateos user rename <old> <new> | crateos user set-role <name> <role> | crateos user set-perms <name> <p1,p2>")
+		os.Exit(1)
+	}
+	client := api.NewClient(requireCLIUser())
+	switch args[0] {
+	case "add":
+		if len(args) < 3 {
+			fmt.Println("usage: crateos user add <name> <role>")
+			os.Exit(1)
+		}
+		var perms []string
+		if len(args) >= 4 && strings.TrimSpace(args[3]) != "" {
+			perms = strings.Split(args[3], ",")
+		}
+		err := client.AddUser(args[1], args[2], perms)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "user add failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("user added")
+	case "del":
+		err := client.DeleteUser(args[1])
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "user delete failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("user deleted")
+	case "rename":
+		if len(args) < 3 {
+			fmt.Println("usage: crateos user rename <old> <new>")
+			os.Exit(1)
+		}
+		err := client.UpdateUser(args[1], args[2], "", nil)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "rename failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("user renamed")
+	case "set-role":
+		if len(args) < 3 {
+			fmt.Println("usage: crateos user set-role <name> <role>")
+			os.Exit(1)
+		}
+		err := client.UpdateUser(args[1], "", args[2], nil)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "set-role failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("user role updated")
+	case "set-perms":
+		if len(args) < 3 {
+			fmt.Println("usage: crateos user set-perms <name> <p1,p2>")
+			os.Exit(1)
+		}
+		perms := strings.Split(args[2], ",")
+		err := client.UpdateUser(args[1], "", "", perms)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "set-perms failed: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Println("user perms updated")
+	default:
+		fmt.Println("usage: crateos user add <name> <role> | crateos user del <name> | crateos user rename <old> <new> | crateos user set-role <name> <role> | crateos user set-perms <name> <p1,p2>")
+		os.Exit(1)
 	}
 }

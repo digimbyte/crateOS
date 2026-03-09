@@ -1,9 +1,14 @@
 package config
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
+	"time"
 
 	"gopkg.in/yaml.v3"
 
@@ -15,11 +20,150 @@ import (
 // Config holds all parsed YAML configs as a single desired-state snapshot.
 type Config struct {
 	CrateOS      CrateOSConfig      `json:"crateos"`
-	Network      NetworkConfig       `json:"network"`
-	Firewall     FirewallConfig      `json:"firewall"`
-	Services     ServicesConfig      `json:"services"`
-	Users        UsersConfig         `json:"users"`
-	ReverseProxy ReverseProxyConfig  `json:"reverse_proxy"`
+	Network      NetworkConfig      `json:"network"`
+	Firewall     FirewallConfig     `json:"firewall"`
+	Services     ServicesConfig     `json:"services"`
+	Users        UsersConfig        `json:"users"`
+	ReverseProxy ReverseProxyConfig `json:"reverse_proxy"`
+}
+
+type ConfigChangeLedger struct {
+	GeneratedAt string                     `json:"generated_at"`
+	Files       map[string]ConfigFileState `json:"files"`
+}
+
+type ConfigFileState struct {
+	File          string `json:"file"`
+	Path          string `json:"path"`
+	Exists        bool   `json:"exists"`
+	Monitoring    string `json:"monitoring"`
+	LastWriter    string `json:"last_writer,omitempty"`
+	CurrentHash   string `json:"current_hash,omitempty"`
+	LastSeenAt    string `json:"last_seen_at,omitempty"`
+	LastChangedAt string `json:"last_changed_at,omitempty"`
+}
+
+func configChangeLedgerPath() string {
+	return platform.CratePath("state", "config-change-ledger.json")
+}
+
+func loadConfigChangeLedger() (ConfigChangeLedger, error) {
+	path := configChangeLedgerPath()
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return ConfigChangeLedger{Files: map[string]ConfigFileState{}}, nil
+		}
+		return ConfigChangeLedger{}, err
+	}
+	var ledger ConfigChangeLedger
+	if err := json.Unmarshal(data, &ledger); err != nil {
+		return ConfigChangeLedger{}, err
+	}
+	if ledger.Files == nil {
+		ledger.Files = map[string]ConfigFileState{}
+	}
+	return ledger, nil
+}
+
+// LoadConfigChangeLedger returns the persisted config change ledger without mutating it.
+func LoadConfigChangeLedger() (ConfigChangeLedger, error) {
+	return loadConfigChangeLedger()
+}
+
+func saveConfigChangeLedger(ledger ConfigChangeLedger) error {
+	ledger.GeneratedAt = time.Now().UTC().Format(time.RFC3339)
+	if ledger.Files == nil {
+		ledger.Files = map[string]ConfigFileState{}
+	}
+	data, err := json.MarshalIndent(ledger, "", "  ")
+	if err != nil {
+		return err
+	}
+	path := configChangeLedgerPath()
+	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
+		return err
+	}
+	return os.WriteFile(path, data, 0644)
+}
+
+func auditConfigChanges(paths []string) error {
+	ledger, err := loadConfigChangeLedger()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	for _, path := range paths {
+		file := filepath.Base(path)
+		record := ledger.Files[file]
+		record.File = file
+		record.Path = path
+		record.LastSeenAt = now
+
+		hash, exists, err := configFileHash(path)
+		if err != nil {
+			return err
+		}
+		if !exists {
+			record.Exists = false
+			record.CurrentHash = ""
+			if record.LastChangedAt == "" {
+				record.LastChangedAt = now
+			}
+			ledger.Files[file] = record
+			continue
+		}
+
+		record.Exists = true
+		if record.CurrentHash != "" && record.CurrentHash != hash {
+			record.Monitoring = "unmonitored"
+			record.LastWriter = "external"
+			record.LastChangedAt = now
+		} else if record.Monitoring == "" {
+			record.Monitoring = "monitored"
+			if record.LastChangedAt == "" {
+				record.LastChangedAt = now
+			}
+		}
+		record.CurrentHash = hash
+		ledger.Files[file] = record
+	}
+	return saveConfigChangeLedger(ledger)
+}
+
+func trackManagedConfigWrite(path string, writer string) error {
+	ledger, err := loadConfigChangeLedger()
+	if err != nil {
+		return err
+	}
+	now := time.Now().UTC().Format(time.RFC3339)
+	hash, exists, err := configFileHash(path)
+	if err != nil {
+		return err
+	}
+	record := ledger.Files[filepath.Base(path)]
+	record.File = filepath.Base(path)
+	record.Path = path
+	record.Exists = exists
+	record.Monitoring = "monitored"
+	record.LastWriter = writer
+	record.CurrentHash = hash
+	record.LastSeenAt = now
+	record.LastChangedAt = now
+	ledger.Files[record.File] = record
+	return saveConfigChangeLedger(ledger)
+}
+
+func configFileHash(path string) (string, bool, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	sum := sha256.Sum256(data)
+	return hex.EncodeToString(sum[:]), true, nil
 }
 
 // ── Per-file structs ────────────────────────────────────────────────
@@ -31,6 +175,28 @@ type CrateOSConfig struct {
 		Timezone string `yaml:"timezone"`
 		Locale   string `yaml:"locale"`
 	} `yaml:"platform"`
+	Access struct {
+		SSH struct {
+			Enabled bool   `yaml:"enabled"`
+			Landing string `yaml:"landing"`
+		} `yaml:"ssh"`
+		LocalGUI struct {
+			Enabled      bool   `yaml:"enabled"`
+			Provider     string `yaml:"provider"`
+			Landing      string `yaml:"landing"`
+			DefaultShell string `yaml:"default_shell"`
+		} `yaml:"local_gui"`
+		VirtualDesktop struct {
+			Enabled  bool   `yaml:"enabled"`
+			Provider string `yaml:"provider"`
+			Landing  string `yaml:"landing"`
+		} `yaml:"virtual_desktop"`
+		BreakGlass struct {
+			Enabled         bool     `yaml:"enabled"`
+			RequirePerm     string   `yaml:"require_permission"`
+			AllowedSurfaces []string `yaml:"allowed_surfaces"`
+		} `yaml:"break_glass"`
+	} `yaml:"access"`
 	CrateRoot string `yaml:"crate_root"`
 	LogLevel  string `yaml:"log_level"`
 	Updates   struct {
@@ -100,15 +266,45 @@ type FirewallConfig struct {
 }
 
 type ServiceEntry struct {
-	Name      string            `yaml:"name"`
-	Enabled   bool              `yaml:"enabled"`
-	Runtime   string            `yaml:"runtime"`
-	Autostart bool              `yaml:"autostart"`
-	Options   map[string]string `yaml:"options"`
+	Name      string                 `yaml:"name"`
+	Enabled   bool                   `yaml:"enabled"`
+	Runtime   string                 `yaml:"runtime"`
+	Autostart bool                   `yaml:"autostart"`
+	Actor     ServiceActorConfig     `yaml:"actor"`
+	Deploy    ServiceDeployConfig    `yaml:"deploy"`
+	Execution ServiceExecutionConfig `yaml:"execution"`
+	Options   map[string]string      `yaml:"options"`
 }
 
 type ServicesConfig struct {
 	Services []ServiceEntry `yaml:"services"`
+}
+
+type ServiceActorConfig struct {
+	Name string `yaml:"name"`
+	Type string `yaml:"type"`
+}
+
+type ServiceDeployConfig struct {
+	Source      string `yaml:"source"`
+	UploadPath  string `yaml:"upload_path"`
+	WorkingDir  string `yaml:"working_dir"`
+	Entry       string `yaml:"entry"`
+	InstallCmd  string `yaml:"install_cmd"`
+	EnvFile     string `yaml:"env_file"`
+	ArtifactDir string `yaml:"artifact_dir"`
+}
+
+type ServiceExecutionConfig struct {
+	Mode          string `yaml:"mode"`
+	StartCmd      string `yaml:"start_cmd"`
+	Schedule      string `yaml:"schedule"`
+	Timeout       string `yaml:"timeout"`
+	StopTimeout   string `yaml:"stop_timeout"`
+	OnTimeout     string `yaml:"on_timeout"`
+	KillSignal    string `yaml:"kill_signal"`
+	Concurrency   string `yaml:"concurrency"`
+	SuccessWindow string `yaml:"success_window"`
 }
 
 type Role struct {
@@ -117,8 +313,10 @@ type Role struct {
 }
 
 type UserEntry struct {
-	Name string `yaml:"name"`
-	Role string `yaml:"role"`
+	Name        string   `yaml:"name"`
+	Role        string   `yaml:"role"`
+	Permissions []string `yaml:"permissions,omitempty"` // allow/deny overrides, e.g. "svc.foo", "-svc.bar"
+	Priority    int      `yaml:"priority,omitempty"`    // higher wins if future merges are needed
 }
 
 type UsersConfig struct {
@@ -159,6 +357,7 @@ type ReverseProxyConfig struct {
 func Load() (*Config, error) {
 	configDir := platform.CratePath("config")
 	cfg := &Config{}
+	configPaths := make([]string, 0, 6)
 
 	loaders := []struct {
 		file   string
@@ -174,12 +373,17 @@ func Load() (*Config, error) {
 
 	for _, l := range loaders {
 		path := filepath.Join(configDir, l.file)
+		configPaths = append(configPaths, path)
 		if err := loadYAML(path, l.target); err != nil {
 			if os.IsNotExist(err) {
 				continue // missing config files are acceptable
 			}
 			return nil, fmt.Errorf("loading %s: %w", l.file, err)
 		}
+	}
+
+	if err := auditConfigChanges(configPaths); err != nil {
+		log.Printf("warning: config change audit failed: %v", err)
 	}
 
 	return cfg, nil
@@ -191,4 +395,36 @@ func loadYAML(path string, target interface{}) error {
 		return err
 	}
 	return yaml.Unmarshal(data, target)
+}
+
+// SaveServices writes the services config back to services.yaml.
+func SaveServices(cfg *Config) error {
+	path := filepath.Join(platform.CratePath("config"), "services.yaml")
+	b, err := yaml.Marshal(cfg.Services)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		return err
+	}
+	if err := OnWebFormSave(path); err != nil {
+		return err
+	}
+	return trackManagedConfigWrite(path, "crateos")
+}
+
+// SaveUsers writes the users config back to users.yaml.
+func SaveUsers(cfg *Config) error {
+	path := filepath.Join(platform.CratePath("config"), "users.yaml")
+	b, err := yaml.Marshal(cfg.Users)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		return err
+	}
+	if _, err = NormalizeFileIfNeeded(path); err != nil {
+		return err
+	}
+	return trackManagedConfigWrite(path, "crateos")
 }

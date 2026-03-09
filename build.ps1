@@ -11,6 +11,53 @@ $Dist     = Join-Path $PSScriptRoot "dist"
 $BinDir   = Join-Path $Dist "bin"
 $Commands = @("crateos", "crateos-agent", "crateos-policy")
 
+function Get-WslCommand {
+    $wsl = Get-Command wsl.exe -ErrorAction SilentlyContinue
+    if (-not $wsl) {
+        Write-Error "WSL is not installed or not in PATH. Install WSL2/Ubuntu first."
+        return $null
+    }
+    return $wsl.Source
+}
+
+function Get-WslRepoPath {
+    $wslPath = & wsl.exe wslpath -a "$PSScriptRoot"
+    if ($LASTEXITCODE -ne 0 -or [string]::IsNullOrWhiteSpace($wslPath)) {
+        Write-Error "Failed to convert repo path for WSL: $PSScriptRoot"
+        return $null
+    }
+    return $wslPath.Trim()
+}
+
+function Invoke-WslMakeTarget {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$MakeTarget
+    )
+
+    $wsl = Get-WslCommand
+    if (-not $wsl) {
+        return
+    }
+
+    $repoPath = Get-WslRepoPath
+    if (-not $repoPath) {
+        return
+    }
+
+    $singleQuoteEscape = "'" + '"' + "'" + '"' + "'"
+    $versionValue = $Version.Replace("'", $singleQuoteEscape)
+    $repoValue = $repoPath.Replace("'", $singleQuoteEscape)
+    $targetValue = $MakeTarget.Replace("'", $singleQuoteEscape)
+    $linuxCommand = "cd '$repoValue' && VERSION='$versionValue' make $targetValue"
+
+    Write-Host "==> delegating '$MakeTarget' to WSL in $repoPath"
+    & $wsl bash -lc $linuxCommand
+    if ($LASTEXITCODE -ne 0) {
+        Write-Error "WSL make $MakeTarget failed"
+    }
+}
+
 function Invoke-Build {
     if (-not (Get-Command go -ErrorAction SilentlyContinue)) {
         Write-Error "Go is not installed or not in PATH. Install Go first: https://go.dev/dl/"
@@ -33,15 +80,15 @@ function Invoke-Build {
 }
 
 function Invoke-Deb {
-    Write-Warning "deb packaging requires Linux (WSL2 or CI). Run 'make deb' in WSL2."
+    Invoke-WslMakeTarget "deb"
 }
 
 function Invoke-Iso {
-    Write-Warning "ISO build requires Linux (WSL2 or CI). Run 'make iso' in WSL2."
+    Invoke-WslMakeTarget "iso"
 }
 
 function Invoke-Qcow2 {
-    Write-Warning "qcow2 build requires Linux (WSL2 or CI). Run 'make qcow2' in WSL2."
+    Invoke-WslMakeTarget "qcow2"
 }
 
 function Invoke-Rpi {
@@ -64,9 +111,9 @@ function Invoke-Help {
     Write-Host ""
     Write-Host "Targets:"
     Write-Host "  build   Compile Go binaries (default)"
-    Write-Host "  deb     Build .deb packages (WSL2 only)"
-    Write-Host "  iso     Build autoinstall ISO (WSL2 only)"
-    Write-Host "  qcow2   Build VM image (WSL2 only)"
+    Write-Host "  deb     Build .deb packages via WSL2"
+    Write-Host "  iso     Build autoinstall ISO via WSL2"
+    Write-Host "  qcow2   Build VM image via WSL2"
     Write-Host "  rpi     Build Pi image (stub)"
     Write-Host "  clean   Remove dist/"
     Write-Host "  help    Show this message"

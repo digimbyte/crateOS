@@ -10,21 +10,34 @@ roles:
   operator:
     description: "Manage services, network, and logs"
     permissions:
+      - "sys.view"
+      - "sys.manage"
       - "svc.*"
       - "net.*"
       - "proxy.*"
       - "logs.view"
       - "logs.export"
-      - "system.status"
-      - "system.maintenance"
 
   viewer:
     description: "Read-only access to status and logs"
     permissions:
-      - "system.status"
+      - "sys.view"
       - "logs.view"
       - "svc.list"
       - "net.status"
+
+  staff:
+    description: "General operators with broad permissions"
+    permissions:
+      - "sys.view"
+      - "sys.manage"
+      - "svc.*"
+      - "net.*"
+      - "proxy.*"
+      - "logs.view"
+      - "logs.export"
+      - "users.view"
+      - "shell.breakglass"
 
 # System users and their role assignments
 users:
@@ -33,8 +46,9 @@ users:
     # This is the default user created by the installer.
 
 # Permission nodes reference:
-#   system.status        - view system dashboard
-#   system.maintenance   - run cleanup/maintenance tasks
+#   sys.view             - view system dashboard
+#   sys.manage           - run platform management actions
+#   users.*              - full user management
 #   svc.*                - all service operations
 #   svc.list             - list services
 #   svc.start            - start services

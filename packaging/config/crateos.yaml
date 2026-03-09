@@ -8,6 +8,24 @@ platform:
   timezone: "UTC"
   locale: "en_US.UTF-8"
 
+access:
+  ssh:
+    enabled: true
+    landing: "console"
+  local_gui:
+    enabled: false
+    provider: "lightdm"
+    landing: "workspace"
+    default_shell: "crateos-session"
+  virtual_desktop:
+    enabled: false
+    provider: ""
+    landing: "workspace"
+  break_glass:
+    enabled: true
+    require_permission: "shell.breakglass"
+    allowed_surfaces: ["ssh"]
+
 crate_root: "/srv/crateos"
 
 # Log level for agent and policy: debug, info, warn, error

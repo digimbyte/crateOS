@@ -1,39 +1,32 @@
-# CrateOS Module: docker
-name: "docker"
-description: "Container runtime engine with compose plugin"
-version: "latest"
-runtime: "systemd"
-
-install:
+apiVersion: crateos/v1
+kind: Module
+metadata:
+  id: docker
+  name: Docker
+  category: runtime
+  version: "1.0.0"
+  description: Managed container runtime with Compose support
+spec:
+  runtimeType: systemd
+  installMode: immediate
   packages:
-    - "docker-ce"
-    - "docker-ce-cli"
-    - "containerd.io"
-    - "docker-compose-plugin"
-  repositories:
-    - name: "docker"
-      url: "https://download.docker.com/linux/ubuntu"
-      key: "https://download.docker.com/linux/ubuntu/gpg"
-      suite: "noble"
-      component: "stable"
-  directories:
-    - "/srv/crateos/services/docker/config"
-    - "/srv/crateos/services/docker/data"
-
-systemd:
-  service: "docker"
-  enabled: true
-  socket: "docker.socket"
-
-health:
-  check: "docker info > /dev/null 2>&1"
-  interval: "60s"
-
-maintenance:
-  prune_images: true
-  prune_volumes: false     # dangerous — off by default
-  prune_networks: true
-
-uninstall:
-  purge_packages: true
-  remove_data: false
+    - docker-ce
+    - docker-ce-cli
+    - containerd.io
+    - docker-compose-plugin
+  units:
+    - docker.service
+    - docker.socket
+  paths:
+    config:
+      canonical: /srv/crateos/services/docker/config
+      native: /etc/docker
+    data:
+      canonical: /srv/crateos/services/docker/data
+      native: /var/lib/docker
+    logs:
+      canonical: /srv/crateos/services/docker/logs
+      native: /var/log
+  healthChecks:
+    - type: command
+      command: docker info > /dev/null 2>&1

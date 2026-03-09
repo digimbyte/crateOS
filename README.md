@@ -31,6 +31,7 @@ CrateOS replaces shell-first administration with a **Pitboy/DOS choose-your-adve
 ## Key features
 
 * **TUI-first administration**: SSH lands in a guided console instead of a raw shell.
+* **Controlled session surfaces**: local GUI and future virtual desktop entry points are intended to host CrateOS-owned sessions, not a normal distro desktop.
 * **Single canonical root**: configs, logs, state, modules, and service data live under `/srv/crateos`.
 * **Idempotent apply**: declarative configuration → desired state → agent applies safely.
 * **Self-healing networking**: headless-safe NetworkManager profiles with MAC-based matching.
@@ -103,7 +104,7 @@ CrateOS makes the OS layout an implementation detail. Users interact with **one 
 
 ### Optional UX & web admin
 
-* **LightDM** (optional local desktop/login layer)
+* **LightDM** (optional CrateOS-controlled local login/session host)
 * **Cockpit** (optional lightweight web admin UI)
 
 ---
@@ -145,6 +146,118 @@ CrateOS makes the OS layout an implementation detail. Users interact with **one 
 
 ---
 
+## MVP machine readiness (ISO install + test/update lanes)
+
+Use this flow to produce image artifacts where the CrateOS ISO is a forced framework installer, and non-ISO artifacts are for test/update workflows.
+
+### 1) Build artifacts
+Build host prerequisites for image targets:
+
+* ISO: `wget`, `7z`, `xorriso`, `sed`, `grep`
+* qcow2: `wget`, `qemu-img`, `cloud-localds`, `guestfish`
+
+```bash
+make build
+make deb
+make iso
+make qcow2
+```
+`make iso` requires `.deb` artifacts and embeds them into the install media; this ISO always installs CrateOS.
+
+Expected outputs in `dist/`:
+
+* `dist/bin/crateos`
+* `dist/bin/crateos-agent`
+* `dist/bin/crateos-policy`
+* `dist/crateos_<version>_amd64.deb`
+* `dist/crateos-agent_<version>_amd64.deb`
+* `dist/crateos-policy_<version>_amd64.deb`
+* `dist/crateos-<version>.iso`
+* `dist/crateos-<version>.qcow2`
+* `dist/seed-<version>.iso`
+`.deb` outputs are image-pipeline build artifacts used for provisioning, not a standalone operator install surface.
+If operator state is ever lost after install, recover it with `crateos bootstrap <name>` from the local machine.
+
+### 2) Install path vs test/update paths
+
+Primary framework install path:
+
+* `dist/crateos-<version>.iso` (forced CrateOS install path)
+
+Testing/update lanes:
+
+* `dist/crateos-<version>.qcow2` + `dist/seed-<version>.iso` (paired test/update workflow)
+
+### 3) Verify service/timer activation on first boot
+
+```bash
+systemctl status crateos-agent.service --no-pager
+systemctl status crateos-policy.timer --no-pager
+```
+Default first-login credential for ISO seed user:
+
+* user: `crate`
+* password: `crateos` (expired in the target system during install; change required on first login)
+
+### 4) Verify CrateOS root bootstrap
+
+```bash
+ls -la /srv/crateos
+cat /srv/crateos/state/installed.json
+```
+
+Also verify default config seed files exist on first install:
+
+```bash
+ls -la /srv/crateos/config
+```
+
+### 5) Verify SSH force-command landing
+
+Confirm `/etc/ssh/sshd_config.d/10-crateos.conf` exists and includes:
+
+* `ForceCommand /usr/local/bin/crateos console`
+
+### 6) Framework install expectations
+
+* CrateOS framework install is ISO-based and forced by this installer; non-ISO artifacts are test/update lanes.
+* Existing `/srv/crateos/config/*.yaml` is preserved; default configs are only seeded when missing on install.
+* ISO late-commands install embedded CrateOS `.deb` files and run dependency repair (`apt-get -f install`) if needed.
+* ISO autoinstall fails fast if embedded `.deb` payload is missing, if expected CrateOS binaries are not present in target rootfs after package install, or if seeded config files / persistent unit enablement links are missing.
+* ISO rebuild now replays the source Ubuntu ISO boot metadata and refreshes `md5sum.txt` after media mutation instead of assuming older hard-coded isolinux paths.
+* ISO and qcow2 now share the same installed bootstrap-artifact verification path before runtime validation, reducing lane drift in machine-readiness checks.
+* ISO and qcow2 both derive their required base package list from `packaging/config/packages.yaml` instead of maintaining separate copied package blocks.
+* ISO and qcow2 both derive shared seed identity defaults (hostname, default user, password hash) from `images/common/seed-defaults.env`.
+* `crateos-policy.timer` now refreshes the canonical readiness report on a 2-minute cadence after boot; installed-host verification treats that report as stale after 3 minutes.
+* Run one-command verification on installed host:
+
+```bash
+/usr/local/bin/verify-mvp-install
+```
+
+### 7) Installable MVP acceptance contract
+Treat the installable MVP foundation as complete only when all of the following are true:
+
+* `make build` produces `dist/bin/crateos`, `dist/bin/crateos-agent`, and `dist/bin/crateos-policy`.
+* `make deb` produces the three expected CrateOS `.deb` artifacts in `dist/`.
+* The staged Debian metadata version matches the build version used for the binaries and emitted artifact filenames.
+* `make iso` produces `dist/crateos-<version>.iso`.
+* `make qcow2` produces `dist/crateos-<version>.qcow2` and `dist/seed-<version>.iso`.
+* Installing from the CrateOS ISO completes without bypassing the embedded CrateOS payload.
+* First boot has `crateos-agent.service` active/enabled, `crateos-agent-watchdog.timer` active/enabled, and `crateos-policy.timer` active/enabled.
+* `/srv/crateos`, `/srv/crateos/config`, `/srv/crateos/state/installed.json`, `/srv/crateos/state/platform-state.json`, `/srv/crateos/state/agent-watchdog.json`, `/srv/crateos/state/readiness-report.json`, `/srv/crateos/state/storage-state.json`, and the seeded default config files exist.
+* SSH lands in `crateos console` via `ForceCommand /usr/local/bin/crateos console`.
+* `/usr/local/bin/verify-mvp-install` passes on the installed host.
+* `/srv/crateos/runtime/agent.sock` exists as a live Unix socket after boot.
+* Platform, storage, and watchdog state artifacts are fresh enough to show the control plane is still updating, not just historically present.
+* `readiness-report.json` is refreshed on the expected policy cadence and remains fresh under the installed-host verifier window instead of aging into a false degraded state.
+* The canonical readiness report says the machine is `ready`, not merely partially present.
+* The first interactive console session renders even if the agent socket is not yet ready, using local fallback state where needed.
+* Installed operator state includes at least one configured admin so local CLI/TUI control paths are usable after first boot.
+* Agent liveness recovery attempts are logged on-host so post-boot crashes do not become silent control-plane loss.
+
+---
+
 ## Contributing
 
 CrateOS is opinionated by design. Contributions that **reduce ambiguity** and **improve determinism** are preferred.
@@ -158,5 +271,5 @@ CrateOS is opinionated by design. Contributions that **reduce ambiguity** and **
 ---
 
 ## License
-
+Apache-2.0. See `LICENSE`.
 TBD

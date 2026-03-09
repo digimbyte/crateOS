@@ -2,17 +2,44 @@
 set -e
 
 CRATE_ROOT="/srv/crateos"
+DEFAULTS_ROOT="/usr/share/crateos/defaults/config"
 
 # Idempotent: create the canonical directory structure.
-for dir in config modules services state state/last-good state/backups logs export bin; do
+for dir in config modules services state state/last-good state/rendered state/backups logs export registry runtime cache backups bin; do
     mkdir -p "${CRATE_ROOT}/${dir}"
 done
 
-# Install and start the systemd service.
-if [ -d /run/systemd/system ]; then
-    systemctl daemon-reload
-    systemctl enable crateos-agent.service
-    systemctl start crateos-agent.service
+# Seed default config files on first install (do not overwrite operator edits).
+if [ -d "${DEFAULTS_ROOT}" ]; then
+  for f in crateos.yaml network.yaml firewall.yaml services.yaml users.yaml reverse-proxy.yaml; do
+    if [ -f "${DEFAULTS_ROOT}/${f}" ] && [ ! -f "${CRATE_ROOT}/config/${f}" ]; then
+      cp "${DEFAULTS_ROOT}/${f}" "${CRATE_ROOT}/config/${f}"
+    fi
+  done
+fi
+# Write installed marker if missing.
+if [ ! -f "${CRATE_ROOT}/state/installed.json" ]; then
+  cat > "${CRATE_ROOT}/state/installed.json" <<EOF
+{
+  "version": "${CRATEOS_VERSION:-0.1.0+noble1}",
+  "installed_at": "$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
+}
+EOF
 fi
 
-echo "crateos-agent: installed and started"
+# Persist enablement for offline/chroot installs as well as live systems.
+mkdir -p /etc/systemd/system/multi-user.target.wants
+ln -sf /lib/systemd/system/crateos-agent.service /etc/systemd/system/multi-user.target.wants/crateos-agent.service
+mkdir -p /etc/systemd/system/timers.target.wants
+ln -sf /lib/systemd/system/crateos-agent-watchdog.timer /etc/systemd/system/timers.target.wants/crateos-agent-watchdog.timer
+mkdir -p "${CRATE_ROOT}/logs"
+touch "${CRATE_ROOT}/logs/agent-watchdog.log"
+
+# Start immediately when systemd is live on the current host.
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+    systemctl start crateos-agent.service
+    systemctl start crateos-agent-watchdog.timer
+fi
+
+echo "crateos-agent: installed and watchdog timer started"

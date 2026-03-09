@@ -65,7 +65,7 @@ CrateOS is a curated, appliance-style server experience built on **Ubuntu Server
 
 ### Optional UX & web admin
 
-* **LightDM** (optional local desktop/login layer)
+* **LightDM** (optional CrateOS-controlled local login/session host)
 * **Cockpit** (optional lightweight web admin UI)
 
 ---
@@ -76,6 +76,7 @@ CrateOS is a curated, appliance-style server experience built on **Ubuntu Server
 
 * Default SSH entry lands in the **Crate Console** (TUI) rather than a raw shell.
 * Raw shell access is treated as **break-glass** (explicit and permission-gated).
+* Any local GUI or future virtual desktop surface should land inside a **CrateOS-owned session/workspace**, not a normal distro desktop.
 * The console provides:
 
   * System status dashboard
@@ -152,15 +153,28 @@ CrateOS is a curated, appliance-style server experience built on **Ubuntu Server
 ```
 
 **Rule:** users interact with `/srv/crateos/**` only. OS paths remain accessible but are considered “under the hood.”
+Managed config writes made by CrateOS are tracked as monitored changes; edits that appear outside CrateOS write paths are recorded as unmonitored config changes so operator/state surfaces can distinguish external drift from CrateOS-owned mutations.
 
 ---
 ## Installation model
 
-CrateOS is **installed as part of the OS install** (autoinstall ISO / qcow2 pipeline). It is not an add-on users layer onto an existing Ubuntu host.
+CrateOS is **installed as part of the OS install**. The CrateOS ISO installer is a forced CrateOS framework install (not a generic Ubuntu installer).
 
 * No in-place “upgrade from vanilla Ubuntu” path
 * Images are built and installed as **CrateOS-first** systems
 * Upgrades are handled by new images/releases, not by in-place conversion or rollback
+* ISO install completion now depends on seeded config presence and persistent first-boot unit enablement; post-install verification is executed with `/usr/local/bin/verify-mvp-install`
+* ISO media rebuild preserves the base Ubuntu boot model by replaying source ISO boot metadata and refreshing media checksums after mutation
+* The default seed account password is expired inside the target system during install so first login still forces a password change without relying on out-of-schema autoinstall keys
+* Fresh installs seed an initial admin operator (`crate` by default); if operator state is missing later, recover locally with `crateos bootstrap <name>`
+* Agent liveness is supervised by both systemd restart policy and `crateos-agent-watchdog.timer`, which logs and retries recovery if the agent or its socket falls out of service after boot
+* Machine-readiness now expects the live agent socket plus rendered platform/watchdog state artifacts, not just enabled units and seeded files
+* Those runtime state artifacts must also stay fresh enough to prove the control plane is still updating after boot
+* Readiness is summarized into a single generated report under `/srv/crateos/state/readiness-report.json` so verification and operator surfaces agree on why a machine is degraded
+* `crateos-policy.timer` refreshes that readiness report every 2 minutes after boot, and installed-host verification treats the report as stale after 3 minutes
+* The TUI also treats a stale readiness report as degraded, so operator surfaces do not keep showing an old historical `ready` state after policy freshness is lost
+* Operator-facing platform adapter status also degrades when `platform-state.json` is stale, so rendered host posture cannot look current after agent updates stop
+* Operator-facing service posture also degrades when stored `crate-state.json` snapshots are stale, so service views do not present old agent renders as current runtime truth
 
 ---
 
@@ -179,9 +193,7 @@ CrateOS uses **fine-grained permission nodes** (Discord/Minecraft style). Deny b
 * `sys.view`
 * `sys.manage`
 * `users.view`
-* `users.create`
-* `users.edit`
-* `users.delete`
+* `users.*`
 * `roles.view`
 * `roles.create`
 * `roles.edit`
@@ -189,19 +201,15 @@ CrateOS uses **fine-grained permission nodes** (Discord/Minecraft style). Deny b
 * `audit.view`
 * `logs.view`
 * `shell.breakglass`
-* `network.view`
-* `network.edit`
-* `proxy.view`
-* `proxy.edit`
+* `net.status`
+* `net.configure`
+* `net.*`
+* `proxy.*`
 * `updates.view`
 * `updates.apply`
 * `backups.view`
 * `backups.run`
-* `modules.view`
-* `modules.install`
-* `modules.uninstall`
-* `modules.enable`
-* `modules.disable`
+* `modules.*`
 
 ### Service-scoped permissions
 
@@ -222,8 +230,8 @@ CrateOS uses **fine-grained permission nodes** (Discord/Minecraft style). Deny b
 
 ### Role templates (starter set)
 
-* **Owner**: `sys.manage`, `users.*`, `roles.*`, `audit.view`, `shell.breakglass`, `network.*`, `proxy.*`, `updates.*`, `backups.*`, `modules.*`, all `svc.*`
-* **Admin**: `users.view`, `roles.view`, `network.edit`, `proxy.edit`, `updates.apply`, `backups.run`, `modules.*`, all `svc.*` (no break-glass)
+* **Owner**: `sys.*`, `users.*`, `roles.*`, `audit.view`, `shell.breakglass`, `net.*`, `proxy.*`, `updates.*`, `backups.*`, `modules.*`, all `svc.*`
+* **Admin**: `sys.view`, `users.view`, `roles.view`, `net.*`, `proxy.*`, `updates.apply`, `backups.run`, `modules.*`, all `svc.*` (no break-glass)
 * **Service Admin (scoped)**: all `svc.<service>.*`
 * **Operator**: `svc.<service>.view|start|stop|restart|logs.view`
 * **Auditor**: `audit.view`, `logs.view`, `svc.<service>.logs.view`
@@ -233,6 +241,16 @@ CrateOS uses **fine-grained permission nodes** (Discord/Minecraft style). Deny b
 * Deny by default
 * Break-glass requires explicit permission and logs a security event
 * Service-scoped roles never grant global permissions
+
+### Access/session posture
+
+CrateOS treats login surfaces as controlled appliance entry points.
+
+* `crateos.yaml` models this under `access`
+* SSH should remain enabled and land in `console`
+* Local GUI currently assumes a LightDM-hosted CrateOS session when enabled
+* Virtual desktop is intended to host the same CrateOS workspace/panel model rather than a generic distro desktop
+* Break-glass remains explicit, permission-gated, and limited to configured entry surfaces
 
 ---
 
@@ -278,6 +296,9 @@ CrateOS splits packages into **required** (always installed at OS install time) 
 ### Permissions model (Bukkit-style)
 
 * Role/group-based permissions:
+  * `sys.view`
+  * `sys.manage`
+  * `users.*`
 
   * `net.*`
   * `svc.*`
@@ -285,6 +306,7 @@ CrateOS splits packages into **required** (always installed at OS install time) 
   * `svc.<service>.plugins.add|remove|configure`
   * `proxy.*`
   * `logs.view`
+  * `modules.*`
   * `shell.breakglass`
 * Default users land in console with only safe actions.
 * Admin users can unlock break-glass shell.
@@ -357,6 +379,24 @@ Features:
 
 CrateOS supports both, but **exposes a single interface** for the user.
 
+### Managed actors and execution policy
+
+CrateOS should treat hosted services and scheduled jobs as managed workloads with their own execution actors.
+
+* each service/module/job should run under a CrateOS-managed actor identity rather than a human operator account
+* uploads should land in a managed intake path first, then be rendered into the runnable service/job working directory
+* operators should be able to classify an upload as:
+  * a long-lived service
+  * a scheduled job
+* execution policy should include:
+  * start command
+  * schedule for jobs
+  * timeout and stop-timeout
+  * kill behavior on timeout
+  * overlap policy for scheduled jobs
+
+This is the basis for “upload files, then run them as a service or invoke them on a schedule” without dumping the operator into raw cron/systemd management.
+
 ---
 
 ## tmux vs screen
@@ -379,12 +419,25 @@ CrateOS exposes one-button actions:
 
 ---
 
+## Storage posture
+
+CrateOS now treats storage as a first-pass platform posture surface for MVP.
+
+* The agent records storage posture under `/srv/crateos/state/storage-state.json`
+* The Platform view surfaces whether the machine has only the system disk or also has safer mounted data targets
+* Mounts under `/srv/*`, `/mnt/*`, or `/media/*` are treated as candidate data targets for stateful crates
+* Module-backed crates surface their canonical/native data paths so operators can see where state actually lives
+
+This is posture and visibility, not full disk orchestration yet.
+
+---
+
 ## Roadmap notes
 
 ### MVP (first shippable)
 
 * Directory layout + manifests
-* TUI: status, logs, services, network
+* TUI: status, diagnostics, logs, services, network
 * Agent: apply idempotently (NM + systemd + nginx)
 * Docker Compose support for a few modules
 
@@ -395,3 +448,144 @@ CrateOS exposes one-button actions:
 * Role/permission UI
 * Snapshot/rollback improvements
 * Signed update channel for CrateOS packages
+
+---
+
+## MVP terminal command-lane acceptance checklist
+
+Use this checklist to validate terminal-first behavior from the operator perspective.
+
+Canonical command set for MVP:
+
+* `help`
+* `list <services|users|logs|sources|net|status|diagnostics>` (or `list` for current view)
+* `nav <setup|menu|status|diagnostics|services|users|logs|network>`
+* `status <system|services|platform|next|prev|select>`
+* `svc <list|enable|start|stop|disable|install|uninstall|restart|next|prev|select> [service|service1,service2|all]`
+* `<service> <enable|start|stop|disable|install|uninstall|restart>`
+* `<enable|start|stop|disable|install|uninstall|restart> <service|service1,service2|all>`
+* `user <list|add|rename|set|role|perms|delete|next|prev|select> [name|name1,name2]`
+* `log <list|next|prev|select> [service|service1,service2]` and `log source <list|next|prev|select> [source|source1,source2]`
+* `net <list|next|prev|select> [interface|iface1,iface2]`
+* `diag <summary|verification|ownership|config|actor [target]|focus <target>|next|prev|select>`
+* `list actors` while in Diagnostics, or `diag list actors`
+* `bootstrap <admin>`
+* `system refresh`
+* `system dos2unix [config|services|all]`
+* `system ftp-complete <path|dir>`
+* `back`
+* `quit`
+* Setup lock: before bootstrap, non-bootstrap control-plane commands should return a setup-lock warning
+* Event-driven newline policy: normalize only on write-complete events (FTP upload completion, web-form save, TUI save) for known text/config formats; do not broad-scan random host paths
+* Lifecycle hooks: `internal/config/lineendings.go` exposes `OnFTPUploadComplete(path)`, `OnWebFormSave(path)`, and `OnTUISave(path)` to keep newline handling centralized
+* FTP upload finalize API: `POST /uploads/ftp/complete` with body `{ "path": "<uploaded-file-or-dir>" }` triggers CRLF normalization on that target (single file or recursive directory walk) and returns status plus normalized/scanned counts
+
+### A) Command mode fundamentals
+
+* Enter command mode with `:`
+* Type a command, press `enter`, confirm feedback appears in the command lane
+* Press `esc` while in command mode, confirm command mode exits cleanly
+* Type unknown input and confirm an explicit error response appears
+* Run a chain such as `nav services; svc list` and confirm sequential execution
+* Run a failing chain and confirm fail-fast abort occurs at the failing step
+* Run a quoted command such as `user add \"ops lead\" admin` and confirm argument parsing remains intact
+* Run a chain with quoted args and separators inside quotes to confirm quote-safe splitting
+
+### B) Navigation coverage
+
+* `nav menu`
+* `nav status`
+* `nav diagnostics`
+* `nav services`
+* `nav users`
+* `nav logs`
+* `nav network`
+* `list`, `list services`, and `list diagnostics`
+* Confirm each command routes to the expected panel
+
+### C) Status module coverage
+
+* `status system`
+* `status services`
+* `status platform`
+* `status next`
+* `status prev`
+* Confirm section focus changes without leaving the status view
+
+### C.1) Diagnostics coverage
+
+* `diag summary`
+* `diag verification`
+* `diag ownership`
+* `diag config`
+* `diag list actors`
+* `diag actor <crate>`
+* `diag focus <crate|actor|user|id>`
+* `diag next`
+* `diag prev`
+* Confirm the verification section reflects install prerequisites such as agent socket, admin operator presence, readiness state, and storage state rendering
+* Confirm actor diagnostics can jump directly to a selected managed workload and that summary/detail windows move together as selection changes
+
+### D) Service command coverage
+
+* `svc next` / `svc prev`
+* `svc list`
+* `svc select <service>`
+* `svc select <service1,service2>` and verify partial/success feedback is explicit
+* `svc start <service>`
+* `svc stop <service>`
+* `svc enable <service>`
+* `svc disable <service>`
+* `svc restart <service1,service2>` and verify partial/success feedback is explicit
+* `svc stop all` and verify all known services receive the action
+* Confirm state and selection update in the Services panel
+
+### E) User command coverage
+
+* `user select <name>`
+* `user list`
+* `user set <name>`
+* `user role <name>`
+* `user perms <name>`
+* `user delete <name>`
+* `user role <name1,name2>` and verify partial/success feedback is explicit
+* `user perms <name1,name2>` and verify partial/success feedback is explicit
+* `user delete <name1,name2>` and verify partial/success feedback is explicit
+* Confirm user list/current-user posture updates accordingly
+
+### F) Logs and network coverage
+
+* `log service next` / `log service prev`
+* `log list` and `log source list`
+* `log service select <service>`
+* `log service select <service1,service2>` and verify partial/success feedback is explicit
+* `log source select <source1,source2>` and verify partial/success feedback is explicit
+* `log source next` / `log source prev`
+* `net next` / `net prev`
+* `net list`
+* `net select <interface>`
+* `net select <iface1,iface2>` and verify partial/success feedback is explicit
+* Confirm selection focus updates in both views
+
+### G) Global behavior
+
+* `system refresh`
+* `system dos2unix config` (or `all`) and verify normalization reports processed file count
+* `system ftp-complete <path-to-crlf-text-file>` and verify `normalized` result is reported
+* Run `system ftp-complete <same-path>` again and verify `skipped` result is reported when file is already LF-normalized
+* `system ftp-complete <ftp-upload-directory>` and verify recursive result includes sensible `normalized`/`scanned` counts
+* `help` from at least two different views and confirm help text is context-sensitive
+* `quit` exits the session cleanly
+
+## MVP ready criteria (command-lane closure)
+
+Mark command-lane MVP ready only when all are true:
+
+* Setup lock is enforced before bootstrap, with only bootstrap/help/quit routes allowed.
+* Every core panel (status/diagnostics/services/users/logs/network) is reachable and operable from commands, not hotkeys alone.
+* Batch command targeting works where implemented (services/users/log service+source/network selects), with explicit partial/success/failure feedback.
+* FTP finalize lifecycle is event-driven and scoped (`system ftp-complete <path|dir>` / `/uploads/ftp/complete`), with recursive directory handling and reported normalized/scanned counts.
+* `system dos2unix` remains scoped to Crate-managed paths (`config|services|all`) and avoids random host scans.
+* Command help/usage text matches implemented grammar exactly.
+* Diagnostics includes a verification surface that mirrors the installed-host MVP verifier prerequisites.
+* Diagnostics includes direct managed-actor targeting and lifecycle inspection without requiring operators to open raw JSON artifacts.

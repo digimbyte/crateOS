@@ -2,11 +2,13 @@
 Description=CrateOS Agent — platform state enforcer
 After=network-online.target
 Wants=network-online.target
+StartLimitIntervalSec=0
+OnFailure=crateos-agent-watchdog.service
 
 [Service]
 Type=simple
 ExecStart=/usr/local/bin/crateos-agent
-Restart=on-failure
+Restart=always
 RestartSec=5
 StandardOutput=journal
 StandardError=journal

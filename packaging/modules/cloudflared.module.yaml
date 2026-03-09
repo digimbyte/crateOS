@@ -1,33 +1,28 @@
-# CrateOS Module: cloudflared
-name: "cloudflared"
-description: "Cloudflare Tunnel client for secure ingress"
-version: "latest"
-runtime: "systemd"
-
-install:
+apiVersion: crateos/v1
+kind: Module
+metadata:
+  id: cloudflared
+  name: Cloudflared
+  category: ingress
+  version: "1.0.0"
+  description: Managed Cloudflare Tunnel client
+spec:
+  runtimeType: systemd
+  installMode: staged
   packages:
-    - "cloudflared"
-  repositories:
-    - name: "cloudflared"
-      url: "https://pkg.cloudflare.com/cloudflared"
-      key: "https://pkg.cloudflare.com/cloudflare-main.gpg"
-      suite: "noble"
-      component: "main"
-  directories:
-    - "/srv/crateos/services/cloudflared/config"
-
-systemd:
-  service: "cloudflared"
-  enabled: true
-
-config:
-  # Tunnel token provided by Cloudflare dashboard
-  tunnel_token: ""         # set via services.yaml options or console
-
-health:
-  check: "systemctl is-active cloudflared"
-  interval: "60s"
-
-uninstall:
-  purge_packages: true
-  remove_data: true
+    - cloudflared
+  units:
+    - cloudflared.service
+  paths:
+    config:
+      canonical: /srv/crateos/services/cloudflared/config
+      native: /etc/cloudflared
+    data:
+      canonical: /srv/crateos/services/cloudflared/data
+      native: /var/lib/cloudflared
+    logs:
+      canonical: /srv/crateos/services/cloudflared/logs
+      native: /var/log
+  healthChecks:
+    - type: command
+      command: systemctl is-active cloudflared.service

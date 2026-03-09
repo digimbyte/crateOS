@@ -6,11 +6,45 @@ services:
     enabled: true
     runtime: "systemd"     # systemd | docker
     autostart: true
+    actor:
+      name: "svc-nginx"
+      type: "service"
+    execution:
+      mode: "service"
+      timeout: "0"
+      stop_timeout: "30s"
+      on_timeout: "kill"
+      kill_signal: "SIGTERM"
+      concurrency: "replace"
 
   - name: "docker"
     enabled: true
     runtime: "systemd"
     autostart: true
+    actor:
+      name: "svc-docker"
+      type: "service"
+    execution:
+      mode: "service"
+      timeout: "0"
+      stop_timeout: "30s"
+      on_timeout: "kill"
+      kill_signal: "SIGTERM"
+      concurrency: "replace"
+  - name: "postgres"
+    enabled: false
+    runtime: "systemd"
+    autostart: false
+    actor:
+      name: "svc-postgres"
+      type: "service"
+    execution:
+      mode: "service"
+      timeout: "0"
+      stop_timeout: "45s"
+      on_timeout: "kill"
+      kill_signal: "SIGTERM"
+      concurrency: "replace"
 
   # - name: "postgres"
   #   enabled: false
@@ -24,5 +58,60 @@ services:
   #   enabled: false
   #   runtime: "systemd"
   #   autostart: false
+  #   actor:
+  #     name: "svc-cloudflared"
+  #     type: "service"
+  #   execution:
+  #     mode: "service"
+  #     timeout: "0"
+  #     stop_timeout: "20s"
+  #     on_timeout: "kill"
+  #     kill_signal: "SIGTERM"
+  #     concurrency: "replace"
   #   options:
   #     tunnel_token: ""
+  #
+  # - name: "docs-api"
+  #   enabled: true
+  #   runtime: "systemd"
+  #   autostart: true
+  #   actor:
+  #     name: "svc-docs-api"
+  #     type: "bot"
+  #   deploy:
+  #     source: "upload"
+  #     upload_path: "/srv/crateos/uploads/docs-api"
+  #     working_dir: "/srv/crateos/services/docs-api/runtime/app"
+  #     entry: "server.js"
+  #     install_cmd: "npm ci --omit=dev"
+  #     env_file: "/srv/crateos/services/docs-api/config/.env"
+  #   execution:
+  #     mode: "service"
+  #     start_cmd: "node server.js"
+  #     timeout: "0"
+  #     stop_timeout: "20s"
+  #     on_timeout: "kill"
+  #     kill_signal: "SIGTERM"
+  #     concurrency: "replace"
+  #
+  # - name: "nightly-sync"
+  #   enabled: true
+  #   runtime: "task"
+  #   autostart: false
+  #   actor:
+  #     name: "job-nightly-sync"
+  #     type: "bot"
+  #   deploy:
+  #     source: "upload"
+  #     upload_path: "/srv/crateos/uploads/nightly-sync"
+  #     working_dir: "/srv/crateos/services/nightly-sync/runtime/job"
+  #     entry: "sync.js"
+  #   execution:
+  #     mode: "job"
+  #     start_cmd: "node sync.js"
+  #     schedule: "0 15 2 * * *"
+  #     timeout: "10m"
+  #     stop_timeout: "15s"
+  #     on_timeout: "kill"
+  #     kill_signal: "SIGTERM"
+  #     concurrency: "forbid"

@@ -1,7 +1,15 @@
 # Build outputs
 dist/
+bin/
 
 # Go
 *.exe
 *.test
 *.out
+coverage.out
+
+# OS/editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

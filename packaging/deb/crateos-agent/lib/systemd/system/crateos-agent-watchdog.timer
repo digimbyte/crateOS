@@ -1,0 +1,10 @@
+[Unit]
+Description=Run CrateOS agent watchdog periodically
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

@@ -6,6 +6,8 @@ const (
 	Version   = "0.1.0-dev"
 	AppName   = "CrateOS"
 	CrateRoot = "/srv/crateos"
+	AgentSocket = "/srv/crateos/runtime/agent.sock"
+	DefaultConfigRoot = "/usr/share/crateos/defaults/config"
 )
 
 // RequiredDirs lists subdirectories that must exist under CrateRoot.
@@ -15,9 +17,14 @@ var RequiredDirs = []string{
 	"services",
 	"state",
 	"state/last-good",
+	"state/rendered",
 	"state/backups",
 	"logs",
 	"export",
+	"registry",
+	"runtime",
+	"cache",
+	"backups",
 	"bin",
 }
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"syscall"
 	"time"
+	"github.com/crateos/crateos/internal/api"
 
 	"github.com/crateos/crateos/internal/logs"
 	"github.com/crateos/crateos/internal/platform"
@@ -24,9 +25,18 @@ func main() {
 	if err := ensureCrateRoot(); err != nil {
 		log.Fatalf("failed to initialize crate root: %v", err)
 	}
+	if err := seedDefaultConfigs(); err != nil {
+		log.Printf("warning: could not seed default configs: %v", err)
+	}
 
 	if err := writeInstalledMarker(); err != nil {
 		log.Printf("warning: could not write installed marker: %v", err)
+	}
+	apiSrv, err := api.Start()
+	if err != nil {
+		log.Printf("warning: could not start API server: %v", err)
+	} else {
+		log.Printf("api server listening on %s", platform.AgentSocket)
 	}
 
 	// Graceful shutdown on SIGINT / SIGTERM.
@@ -44,11 +54,42 @@ func main() {
 		select {
 		case s := <-sig:
 			log.Printf("received %s — shutting down", s)
+			if apiSrv != nil {
+				apiSrv.Stop()
+			}
 			return
 		case <-ticker.C:
 			runReconcile()
 		}
 	}
+}
+
+func seedDefaultConfigs() error {
+	configDir := platform.CratePath("config")
+	defaultRoot := platform.DefaultConfigRoot
+	entries, err := os.ReadDir(defaultRoot)
+	if err != nil {
+		// tolerate missing packaged defaults in dev environments
+		return nil
+	}
+	for _, entry := range entries {
+		if entry.IsDir() {
+			continue
+		}
+		src := filepath.Join(defaultRoot, entry.Name())
+		dst := filepath.Join(configDir, entry.Name())
+		if _, err := os.Stat(dst); err == nil {
+			continue
+		}
+		data, err := os.ReadFile(src)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(dst, data, 0644); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func runReconcile() {

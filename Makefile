@@ -1,4 +1,4 @@
-VERSION  ?= 0.1.0-dev
+VERSION  ?= 0.1.0+noble1
 GOFLAGS  ?= -trimpath
 DIST     := dist
 BIN      := $(DIST)/bin
@@ -13,9 +13,11 @@ all: build
 # ── Build ────────────────────────────────────────────────────────────
 build: $(addprefix $(BIN)/,$(CMDS))
 
+LDFLAGS  := -X github.com/crateos/crateos/internal/platform.Version=$(VERSION)
+
 $(BIN)/%: cmd/%/main.go
 	@mkdir -p $(BIN)
-	go build $(GOFLAGS) -o $@ ./cmd/$*
+	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $@ ./cmd/$*
 
 # ── Debian packages ──────────────────────────────────────────────────
 deb: build
@@ -26,7 +28,7 @@ deb: build
 		mkdir -p $$staging/DEBIAN; \
 		mkdir -p $$staging/usr/local/bin; \
 		cp packaging/deb/$$pkg/DEBIAN/* $$staging/DEBIAN/; \
-		chmod 755 $$staging/DEBIAN/postinst 2>/dev/null || true; \
+		chmod 755 $$staging/DEBIAN/* 2>/dev/null || true; \
 		cp $(BIN)/$$pkg $$staging/usr/local/bin/; \
 		if [ -d packaging/deb/$$pkg/etc ]; then \
 			cp -r packaging/deb/$$pkg/etc $$staging/; \
@@ -34,7 +36,22 @@ deb: build
 		if [ -d packaging/deb/$$pkg/lib ]; then \
 			cp -r packaging/deb/$$pkg/lib $$staging/; \
 		fi; \
-		dpkg-deb --build $$staging $(DIST)/$$pkg_$(VERSION)_amd64.deb; \
+		if [ -d packaging/deb/$$pkg/usr ]; then \
+			cp -r packaging/deb/$$pkg/usr $$staging/; \
+			chmod 755 $$staging/usr/local/bin/* 2>/dev/null || true; \
+		fi; \
+		if [ "$$pkg" = "crateos-agent" ]; then \
+			mkdir -p $$staging/usr/share/crateos/defaults; \
+			cp -r packaging/config $$staging/usr/share/crateos/defaults/; \
+		fi; \
+		# Inject version into postinst (CRATEOS_VERSION env placeholder).
+		if [ -f $$staging/DEBIAN/control ]; then \
+			sed -i "s/^Version: .*/Version: $(VERSION)/" $$staging/DEBIAN/control; \
+		fi; \
+		if [ -f $$staging/DEBIAN/postinst ]; then \
+			sed -i "s/CRATEOS_VERSION:-[^}]*/CRATEOS_VERSION:-$(VERSION)/" $$staging/DEBIAN/postinst; \
+		fi; \
+		dpkg-deb --build $$staging $(DIST)/$${pkg}_$(VERSION)_amd64.deb; \
 	done
 	@echo "==> .deb packages written to $(DIST)/"
 

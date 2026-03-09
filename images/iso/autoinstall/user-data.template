@@ -1,0 +1,42 @@
+#cloud-config
+# CrateOS autoinstall seed — targets Ubuntu 24.04 LTS (Noble Numbat)
+autoinstall:
+  version: 1
+  locale: en_US.UTF-8
+  keyboard:
+    layout: us
+
+  identity:
+    hostname: __HOSTNAME__
+    username: __DEFAULT_USER__
+    # Default password: "__DEFAULT_PASSWORD__" (change on first login)
+    # Generated with: openssl passwd -6 __DEFAULT_PASSWORD__
+    password: "__PASSWORD_HASH__"
+
+  ssh:
+    install-server: true
+    allow-pw: true
+
+  # Derived from packaging/config/packages.yaml (required)
+  packages:
+__REQUIRED_PACKAGES__
+
+  late-commands:
+    # Install CrateOS packages from ISO media (mandatory for this installer).
+    - |
+      if [ ! -d /cdrom/crateos-debs ]; then
+        echo "CrateOS debs not found on media — failing install"
+        exit 1
+      fi
+      if ! ls /cdrom/crateos-debs/*.deb >/dev/null 2>&1; then
+        echo "No CrateOS .deb files found on media — failing install"
+        exit 1
+      fi
+      cp /cdrom/crateos-debs/*.deb /target/tmp/
+      curtin in-target -- dpkg -i /tmp/crateos*.deb || curtin in-target -- apt-get -f install -y
+      curtin in-target -- chage -d 0 __DEFAULT_USER__
+      rm -f /target/tmp/crateos*.deb
+      if ! curtin in-target -- /usr/local/bin/verify-bootstrap-artifacts; then
+        echo "CrateOS bootstrap artifact verification failed in target rootfs after package install — failing install"
+        exit 1
+      fi

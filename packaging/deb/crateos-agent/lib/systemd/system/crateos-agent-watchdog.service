@@ -1,0 +1,11 @@
+[Unit]
+Description=CrateOS Agent Watchdog — audit and recover agent liveness
+After=crateos-agent.service
+Wants=crateos-agent.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/crateos-agent-watchdog
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=crateos-agent-watchdog

@@ -1,9 +1,12 @@
 package sysinfo
 
 import (
+	"encoding/json"
 	"net"
 	"os"
+	"os/exec"
 	"runtime"
+	"strings"
 	"time"
 )
 
@@ -62,4 +65,76 @@ func NetworkInterfaces() []NetIface {
 		result = append(result, ni)
 	}
 	return result
+}
+
+type StorageDevice struct {
+	Name       string `json:"name"`
+	Path       string `json:"path"`
+	Type       string `json:"type"`
+	Mountpoint string `json:"mountpoint"`
+	FSType     string `json:"fs_type"`
+	Size       string `json:"size"`
+	Removable  bool   `json:"removable"`
+	Rotational bool   `json:"rotational"`
+}
+
+func StorageDevices() []StorageDevice {
+	if runtime.GOOS != "linux" {
+		return nil
+	}
+	out, err := exec.Command("lsblk", "-J", "-o", "NAME,PATH,TYPE,MOUNTPOINT,FSTYPE,SIZE,RM,ROTA").Output()
+	if err != nil {
+		return nil
+	}
+	var payload struct {
+		Blockdevices []struct {
+			Name       string `json:"name"`
+			Path       string `json:"path"`
+			Type       string `json:"type"`
+			Mountpoint string `json:"mountpoint"`
+			FSType     string `json:"fstype"`
+			Size       string `json:"size"`
+			RM         bool   `json:"rm"`
+			ROTA       bool   `json:"rota"`
+			Children   []struct {
+				Name       string `json:"name"`
+				Path       string `json:"path"`
+				Type       string `json:"type"`
+				Mountpoint string `json:"mountpoint"`
+				FSType     string `json:"fstype"`
+				Size       string `json:"size"`
+				RM         bool   `json:"rm"`
+				ROTA       bool   `json:"rota"`
+			} `json:"children"`
+		} `json:"blockdevices"`
+	}
+	if err := json.Unmarshal(out, &payload); err != nil {
+		return nil
+	}
+	devices := make([]StorageDevice, 0)
+	for _, dev := range payload.Blockdevices {
+		devices = append(devices, StorageDevice{
+			Name:       strings.TrimSpace(dev.Name),
+			Path:       strings.TrimSpace(dev.Path),
+			Type:       strings.TrimSpace(dev.Type),
+			Mountpoint: strings.TrimSpace(dev.Mountpoint),
+			FSType:     strings.TrimSpace(dev.FSType),
+			Size:       strings.TrimSpace(dev.Size),
+			Removable:  dev.RM,
+			Rotational: dev.ROTA,
+		})
+		for _, child := range dev.Children {
+			devices = append(devices, StorageDevice{
+				Name:       strings.TrimSpace(child.Name),
+				Path:       strings.TrimSpace(child.Path),
+				Type:       strings.TrimSpace(child.Type),
+				Mountpoint: strings.TrimSpace(child.Mountpoint),
+				FSType:     strings.TrimSpace(child.FSType),
+				Size:       strings.TrimSpace(child.Size),
+				Removable:  child.RM,
+				Rotational: child.ROTA,
+			})
+		}
+	}
+	return devices
 }
