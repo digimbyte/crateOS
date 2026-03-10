@@ -84,11 +84,16 @@ deb-rpi0: deb
 
 package-deb: build
 	@for pkg in $(DEB_PKGS); do \
-		echo "==> packaging $$pkg"; \
-		staging=$(DIST)/deb-staging/$$pkg; \
-		rm -rf $$staging; \
+		echo "  • packaging $$pkg"; \
+		tmpdir=$$(mktemp -d); \
+		staging=$$tmpdir/$$pkg; \
 		mkdir -p $$staging/DEBIAN; \
 		mkdir -p $$staging/usr/local/bin; \
+		chmod 755 $$staging; \
+		chmod 755 $$staging/DEBIAN; \
+		chmod 755 $$staging/usr; \
+		chmod 755 $$staging/usr/local; \
+		chmod 755 $$staging/usr/local/bin; \
 		cp packaging/deb/$$pkg/DEBIAN/* $$staging/DEBIAN/; \
 		chmod 755 $$staging/DEBIAN/* 2>/dev/null || true; \
 		cp $(BIN)/$$pkg $$staging/usr/local/bin/; \
@@ -106,16 +111,18 @@ package-deb: build
 			mkdir -p $$staging/usr/share/crateos/defaults; \
 			cp -r packaging/config $$staging/usr/share/crateos/defaults/; \
 		fi; \
-		# Inject version into postinst (CRATEOS_VERSION env placeholder).
 		if [ -f $$staging/DEBIAN/control ]; then \
 			sed -i "s/^Version: .*/Version: $(VERSION)/" $$staging/DEBIAN/control; \
 		fi; \
 		if [ -f $$staging/DEBIAN/postinst ]; then \
 			sed -i "s/CRATEOS_VERSION:-[^}]*/CRATEOS_VERSION:-$(VERSION)/" $$staging/DEBIAN/postinst; \
 		fi; \
-		dpkg-deb --build $$staging $(DIST)/$${pkg}_$(VERSION)_amd64.deb; \
+		dpkg-deb --build $$staging $$tmpdir/$${pkg}_$(VERSION)_amd64.deb; \
+		cp $$tmpdir/$${pkg}_$(VERSION)_amd64.deb $(DIST)/$${pkg}_$(VERSION)_amd64.deb; \
+		rm -rf $$tmpdir; \
 	done
-	@echo "==> .deb packages written to $(DIST)/"
+	@echo ""
+	@echo "✓ .deb packages written to $(DIST)/"
 
 # ── Image builders (platform-specific) ────────────────────────────────────────────────────
 image-x86: deb-x86

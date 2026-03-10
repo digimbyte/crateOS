@@ -1331,11 +1331,11 @@ func linuxPathRecursiveOwnershipIssue(rootPath, expectedUser, expectedGroup stri
 		}
 		if issue := linuxPathEntryOwnershipIssue(current, info, expectedUser, expectedGroup); issue != "" {
 			issueCount++
-			return fmt.Errorf(issue)
+			return fmt.Errorf("%s", issue)
 		}
 		if issue := linuxPathEntryPermissionIssue(current, info); issue != "" {
 			issueCount++
-			return fmt.Errorf(issue)
+			return fmt.Errorf("%s", issue)
 		}
 		if issueCount >= 1 {
 			return filepath.SkipAll
