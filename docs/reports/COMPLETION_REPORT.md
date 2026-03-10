@@ -57,13 +57,13 @@ Successfully refactored CrateOS to eliminate the internal HTTP API layer for use
 ### ✅ Phase 3: Documentation
 Created comprehensive documentation (899 LOC):
 
-1. **REFACTOR_SUMMARY.md** (240 LOC)
+1. **docs/refactor/REFACTOR_SUMMARY.md** (240 LOC)
    - Before/after architecture comparison
    - Validation checklist
    - Code statistics
    - Migration notes
 
-2. **REFACTOR_DOCS.md** (227 LOC)
+2. **docs/refactor/REFACTOR_DOCS.md** (227 LOC)
    - Documentation index
    - Integration points
    - Developer workflows
@@ -108,9 +108,9 @@ internal/api/virtualization.go          (175 LOC) ❌
 ```
 docs/INTERNAL_ARCHITECTURE.md           (337 LOC) ✅
 docs/TUI_MANAGEMENT_FUNCTIONS.md        (322 LOC) ✅
-REFACTOR_SUMMARY.md                     (240 LOC) ✅
-REFACTOR_DOCS.md                        (227 LOC) ✅
-COMPLETION_REPORT.md                    (this file)
+docs/refactor/REFACTOR_SUMMARY.md       (240 LOC) ✅
+docs/refactor/REFACTOR_DOCS.md          (227 LOC) ✅
+docs/reports/COMPLETION_REPORT.md       (this file)
 ```
 
 ### Modified
@@ -230,8 +230,8 @@ internal/tui/app.go                     (+200 LOC) ✅
 
 ### Created Documents
 
-1. **REFACTOR_SUMMARY.md** - High-level overview for decision makers
-2. **REFACTOR_DOCS.md** - Navigation guide and FAQ
+1. **docs/refactor/REFACTOR_SUMMARY.md** - High-level overview for decision makers
+2. **docs/refactor/REFACTOR_DOCS.md** - Navigation guide and FAQ
 3. **docs/INTERNAL_ARCHITECTURE.md** - Complete technical reference
 4. **docs/TUI_MANAGEMENT_FUNCTIONS.md** - Function API reference
 
@@ -248,9 +248,9 @@ internal/tui/app.go                     (+200 LOC) ✅
 - [x] Testing recommendations
 
 ### Documentation Audience
-- **Project Leads**: Read REFACTOR_SUMMARY.md
+- **Project Leads**: Read `docs/refactor/REFACTOR_SUMMARY.md`
 - **Architects**: Read docs/INTERNAL_ARCHITECTURE.md
-- **Developers**: Read REFACTOR_DOCS.md + docs/TUI_MANAGEMENT_FUNCTIONS.md
+- **Developers**: Read `docs/refactor/REFACTOR_DOCS.md` + `docs/TUI_MANAGEMENT_FUNCTIONS.md`
 - **Integrators**: Read docs/INTERNAL_ARCHITECTURE.md + Integration Points section
 
 ---
@@ -345,9 +345,9 @@ internal/tui/app.go                     (+200 LOC) ✅
 ## Appendix: Documentation Files
 
 ### Root Level
-- `REFACTOR_SUMMARY.md` - Executive summary
-- `REFACTOR_DOCS.md` - Navigation guide and FAQ
-- `COMPLETION_REPORT.md` - This document
+- `docs/refactor/REFACTOR_SUMMARY.md` - Executive summary
+- `docs/refactor/REFACTOR_DOCS.md` - Navigation guide and FAQ
+- `docs/reports/COMPLETION_REPORT.md` - This document
 
 ### In docs/
 - `INTERNAL_ARCHITECTURE.md` - Complete system design
@@ -364,6 +364,6 @@ internal/tui/app.go                     (+200 LOC) ✅
 **Project Complete** ✅
 
 For questions or clarifications, refer to:
-1. REFACTOR_DOCS.md (FAQ section)
+1. docs/refactor/REFACTOR_DOCS.md (FAQ section)
 2. docs/INTERNAL_ARCHITECTURE.md (Technical details)
 3. Git history (Detailed changes)

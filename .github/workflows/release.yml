@@ -14,8 +14,8 @@ env:
   GO_VERSION: '1.22'
 
 jobs:
-  build-deb:
-    name: Build .deb packages (amd64)
+  build-deb-x86:
+    name: Build .deb packages (x86)
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -25,20 +25,64 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
 
       - name: Build binaries
-        run: make build
+        run: make PLATFORM=x86 build-x86
 
       - name: Build .deb packages
-        run: make deb VERSION=${{ github.event.inputs.version || github.ref_name }}
+        run: make PLATFORM=x86 deb-x86 VERSION=${{ github.event.inputs.version || github.ref_name }}
 
       - name: Upload .deb artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: deb-packages
-          path: dist/*.deb
+          name: deb-packages-x86
+          path: dist/*_amd64.deb
+
+  build-deb-rpi:
+    name: Build .deb packages (Raspberry Pi 4/5)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binaries
+        run: make PLATFORM=rpi build-rpi
+
+      - name: Build .deb packages
+        run: make PLATFORM=rpi deb-rpi VERSION=${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Upload .deb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-packages-rpi
+          path: dist/*_arm64.deb
+
+  build-deb-rpi0:
+    name: Build .deb packages (Raspberry Pi Zero 2 W)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Build binaries
+        run: make PLATFORM=rpi0 build-rpi0
+
+      - name: Build .deb packages
+        run: make PLATFORM=rpi0 deb-rpi0 VERSION=${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Upload .deb artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: deb-packages-rpi0
+          path: dist/*_arm64.deb
 
   build-iso:
     name: Build autoinstall ISO (amd64)
-    needs: build-deb
+    needs: build-deb-x86
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -53,14 +97,14 @@ jobs:
       - name: Download .deb artifacts
         uses: actions/download-artifact@v4
         with:
-          name: deb-packages
+          name: deb-packages-x86
           path: dist/
 
       - name: Build binaries
-        run: make build
+        run: make PLATFORM=x86 build-x86
 
       - name: Build ISO
-        run: make iso VERSION=${{ github.event.inputs.version || github.ref_name }}
+        run: make PLATFORM=x86 iso VERSION=${{ github.event.inputs.version || github.ref_name }}
         env:
           ISO_MODE: offline-lite
 
@@ -72,7 +116,7 @@ jobs:
 
   build-qcow2:
     name: Build qcow2 VM image (amd64)
-    needs: build-deb
+    needs: build-deb-x86
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -87,14 +131,14 @@ jobs:
       - name: Download .deb artifacts
         uses: actions/download-artifact@v4
         with:
-          name: deb-packages
+          name: deb-packages-x86
           path: dist/
 
       - name: Build binaries
-        run: make build
+        run: make PLATFORM=x86 build-x86
 
       - name: Build qcow2
-        run: make qcow2 VERSION=${{ github.event.inputs.version || github.ref_name }}
+        run: make PLATFORM=x86 qcow2 VERSION=${{ github.event.inputs.version || github.ref_name }}
 
       - name: Upload qcow2 artifact
         uses: actions/upload-artifact@v4
@@ -104,13 +148,81 @@ jobs:
 
   build-rpi:
     name: Build Raspberry Pi image (arm64)
+    needs: build-deb-rpi
     runs-on: ubuntu-latest
     steps:
-      - run: echo "rpi target not yet implemented — stub job"
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Raspberry Pi image tools
+        run: sudo apt-get update && sudo apt-get install -y xz-utils parted kpartx rsync sed grep gawk mount util-linux wget
+
+      - name: Download .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages-rpi
+          path: dist/
+
+      - name: Build binaries
+        run: make PLATFORM=rpi build-rpi
+
+      - name: Build Raspberry Pi image
+        run: make PLATFORM=rpi image-rpi VERSION=${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Compress Raspberry Pi image
+        run: xz -T0 -z -f -k dist/*.img
+
+      - name: Upload Raspberry Pi artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpi-image
+          path: |
+            dist/*.img
+            dist/*.img.xz
+
+  build-rpi0:
+    name: Build Raspberry Pi Zero 2 W image (arm64)
+    needs: build-deb-rpi0
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Install Raspberry Pi image tools
+        run: sudo apt-get update && sudo apt-get install -y xz-utils parted kpartx rsync sed grep gawk mount util-linux wget
+
+      - name: Download .deb artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: deb-packages-rpi0
+          path: dist/
+
+      - name: Build binaries
+        run: make PLATFORM=rpi0 build-rpi0
+
+      - name: Build Raspberry Pi Zero 2 W image
+        run: make PLATFORM=rpi0 image-rpi0 VERSION=${{ github.event.inputs.version || github.ref_name }}
+
+      - name: Compress Raspberry Pi Zero 2 W image
+        run: xz -T0 -z -f -k dist/*.img
+
+      - name: Upload Raspberry Pi Zero 2 W artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: rpi0-image
+          path: |
+            dist/*.img
+            dist/*.img.xz
 
   release:
     name: Create GitHub Release
-    needs: [build-deb, build-iso, build-qcow2]
+    needs: [build-deb-x86, build-deb-rpi, build-deb-rpi0, build-iso, build-qcow2, build-rpi, build-rpi0]
     runs-on: ubuntu-latest
     if: startsWith(github.ref, 'refs/tags/v')
     permissions:
@@ -126,7 +238,7 @@ jobs:
       - name: Generate checksums
         run: |
           cd artifacts
-          find . -type f \( -name '*.deb' -o -name '*.iso' -o -name '*.qcow2' \) -exec sha256sum {} + > checksums-sha256.txt
+          find . -type f \( -name '*.deb' -o -name '*.iso' -o -name '*.qcow2' -o -name '*.img' -o -name '*.img.xz' \) -exec sha256sum {} + > checksums-sha256.txt
           cat checksums-sha256.txt
 
       - name: Create release
@@ -137,4 +249,6 @@ jobs:
             artifacts/**/*.deb
             artifacts/**/*.iso
             artifacts/**/*.qcow2
+            artifacts/**/*.img
+            artifacts/**/*.img.xz
             artifacts/checksums-sha256.txt

@@ -10,7 +10,7 @@ This directory contains comprehensive documentation for CrateOS's platform-speci
 
 Start here:
 
-1. **[PLATFORM_BUILD_QUICKSTART.md](../PLATFORM_BUILD_QUICKSTART.md)** (5 min read)
+1. **[PLATFORM_BUILD_QUICKSTART.md](build/PLATFORM_BUILD_QUICKSTART.md)** (5 min read)
    - Quick reference for building each platform
    - Build commands for Windows and Linux
    - File structure overview
@@ -20,7 +20,7 @@ Start here:
 
 Understand the architecture:
 
-2. **[ARCHITECTURE_PLATFORM_BUILDS.md](../ARCHITECTURE_PLATFORM_BUILDS.md)** (15 min read)
+2. **[PLATFORM_BUILDS.md](architecture/PLATFORM_BUILDS.md)** (15 min read)
    - Complete system design and implementation
    - Platform specifications and constraints
    - Build system details (Makefile and build.ps1)
@@ -55,12 +55,12 @@ Reference material:
 
 ## Document Map
 
-### Top-Level (in root)
+### Organized docs
 
 | File | Purpose | Audience |
 | ---- | ------- | --------- |
-| `PLATFORM_BUILD_QUICKSTART.md` | Quick start guide | All users |
-| `ARCHITECTURE_PLATFORM_BUILDS.md` | Complete architecture reference | Developers, architects |
+| `build/PLATFORM_BUILD_QUICKSTART.md` | Quick start guide | All users |
+| `architecture/PLATFORM_BUILDS.md` | Complete architecture reference | Developers, architects |
 
 ### In docs/
 
@@ -74,7 +74,7 @@ Reference material:
 
 | File | Purpose |
 | ---- | ------- |
-| `BUILD_SYSTEM.md` | Original build system (now deprecated, see ARCHITECTURE_PLATFORM_BUILDS.md) |
+| `build/BUILD_SYSTEM.md` | Original build system (now superseded by `architecture/PLATFORM_BUILDS.md`) |
 | `MODULE_SPEC.md` | Base module specification |
 | `MODULE_REGISTRY.md` | Module registry model |
 
@@ -142,7 +142,7 @@ make PLATFORM={x86|rpi|rpi0} image-*  # Build images
 
 ### Step 2: Build
 
-See `PLATFORM_BUILD_QUICKSTART.md` for exact commands.
+See `docs/build/PLATFORM_BUILD_QUICKSTART.md` for exact commands.
 
 ### Step 3: Deploy
 
@@ -268,8 +268,8 @@ This enables conditional logic without runtime detection overhead.
 
 ```
 CrateOS/
-├── PLATFORM_BUILD_QUICKSTART.md         ← Start here for quick reference
-├── ARCHITECTURE_PLATFORM_BUILDS.md      ← Complete system design
+├── docs/build/PLATFORM_BUILD_QUICKSTART.md   ← Start here for quick reference
+├── docs/architecture/PLATFORM_BUILDS.md      ← Complete system design
 ├── Makefile                             ← Build orchestration
 ├── build.ps1                            ← Windows driver
 │
@@ -316,8 +316,8 @@ CrateOS/
 
 ## Next Steps
 
-1. **Try it**: See `PLATFORM_BUILD_QUICKSTART.md`
-2. **Understand it**: Read `ARCHITECTURE_PLATFORM_BUILDS.md`
+1. **Try it**: See `docs/build/PLATFORM_BUILD_QUICKSTART.md`
+2. **Understand it**: Read `docs/architecture/PLATFORM_BUILDS.md`
 3. **Deploy it**: Choose your target platform and build
 4. **Develop for it**: Use `MODULE_PLATFORM_CONSTRAINTS.md` to make modules platform-aware
 5. **Extend it**: Add new platforms following the pattern

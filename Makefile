@@ -23,6 +23,7 @@ endif
 
 CMDS     := crateos crateos-agent crateos-policy
 DEB_PKGS := crateos crateos-agent crateos-policy
+DEB_ARCH ?= $(GOARCH)
 
 .PHONY: all build build-x86 build-rpi build-rpi0 deb deb-x86 deb-rpi deb-rpi0 iso image-x86 image-rpi image-rpi0 qcow2 rpi clean
 
@@ -117,8 +118,8 @@ package-deb: build
 		if [ -f $$staging/DEBIAN/postinst ]; then \
 			sed -i "s/CRATEOS_VERSION:-[^}]*/CRATEOS_VERSION:-$(VERSION)/" $$staging/DEBIAN/postinst; \
 		fi; \
-		dpkg-deb --build $$staging $$tmpdir/$${pkg}_$(VERSION)_amd64.deb; \
-		cp $$tmpdir/$${pkg}_$(VERSION)_amd64.deb $(DIST)/$${pkg}_$(VERSION)_amd64.deb; \
+		dpkg-deb --build $$staging $$tmpdir/$${pkg}_$(VERSION)_$(DEB_ARCH).deb; \
+		cp $$tmpdir/$${pkg}_$(VERSION)_$(DEB_ARCH).deb $(DIST)/$${pkg}_$(VERSION)_$(DEB_ARCH).deb; \
 		rm -rf $$tmpdir; \
 	done
 	@echo ""

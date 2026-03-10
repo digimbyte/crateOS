@@ -137,7 +137,7 @@ DOCUMENTATION PROVIDED
 ================================================================================
 
 FOR PROJECT LEADS:
-  → Read: REFACTOR_SUMMARY.md
+  → Read: docs/refactor/REFACTOR_SUMMARY.md
   → Overview of changes, before/after comparison, code statistics
 
 FOR ARCHITECTS:
@@ -145,7 +145,7 @@ FOR ARCHITECTS:
   → Complete system design, component descriptions, data flows
 
 FOR DEVELOPERS:
-  → Read: REFACTOR_DOCS.md + docs/TUI_MANAGEMENT_FUNCTIONS.md
+  → Read: docs/refactor/REFACTOR_DOCS.md + docs/TUI_MANAGEMENT_FUNCTIONS.md
   → Function signatures, usage examples, integration points
 
 FOR INTEGRATORS:
@@ -153,7 +153,7 @@ FOR INTEGRATORS:
   → How to extend and integrate with the system
 
 FOR CODE REVIEWERS:
-  → Read: VERIFICATION_CHECKLIST.md
+  → Read: docs/reports/VERIFICATION_CHECKLIST.md
   → Complete verification of all changes
 
 ================================================================================
@@ -161,9 +161,9 @@ NEXT STEPS
 ================================================================================
 
 IMMEDIATE (Code Review Phase):
-  1. Review REFACTOR_SUMMARY.md
+  1. Review docs/refactor/REFACTOR_SUMMARY.md
   2. Review code changes in git diff
-  3. Review VERIFICATION_CHECKLIST.md
+  3. Review docs/reports/VERIFICATION_CHECKLIST.md
 
 TESTING PHASE:
   1. Add unit tests for direct functions
@@ -214,8 +214,8 @@ KEY FILES TO REVIEW
 ================================================================================
 
 Start Here:
-  1. REFACTOR_SUMMARY.md - Executive overview
-  2. VERIFICATION_CHECKLIST.md - Complete verification status
+  1. docs/refactor/REFACTOR_SUMMARY.md - Executive overview
+  2. docs/reports/VERIFICATION_CHECKLIST.md - Complete verification status
 
 Technical Details:
   3. docs/INTERNAL_ARCHITECTURE.md - System design
@@ -227,7 +227,7 @@ Code Changes:
   7. internal/state/platform_reconcile.go - Virtual desktop integration (line 27)
 
 Questions:
-  → See: REFACTOR_DOCS.md (FAQ section)
+  → See: docs/refactor/REFACTOR_DOCS.md (FAQ section)
   → See: docs/INTERNAL_ARCHITECTURE.md (Design rationale)
 
 ================================================================================

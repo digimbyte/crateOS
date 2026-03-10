@@ -214,8 +214,8 @@ New guides created:
 
 | File | Purpose |
 |------|---------|
-| `SETUP_GUIDE.md` | Step-by-step setup with troubleshooting |
-| `BUILD_SAFETY.md` | This file - safety architecture |
+| `docs/setup/SETUP_GUIDE.md` | Step-by-step setup with troubleshooting |
+| `docs/build/BUILD_SAFETY.md` | This file - safety architecture |
 | `wsl-init.ps1` | Standalone diagnostic script |
 | Enhanced `build.ps1` | With comprehensive validation |
 

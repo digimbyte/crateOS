@@ -554,8 +554,9 @@ function Invoke-Deb {
         exit 1
     }
     $target = "deb-$Platform"
-    Write-Banner "Building Debian packages"
+    Write-Banner "Building Debian packages (package-only)"
     Write-Step "Platform: $Platform"
+    Write-WarnLine "This target stops at .deb artifacts. Use image-x86 or iso to produce a bootable ISO."
     Invoke-WslMakeTarget $target
 }
 
@@ -828,10 +829,10 @@ function Invoke-TargetPrompt {
     Write-Banner "Choose build target"
     Write-Host "  1) Guided build flow" -ForegroundColor Cyan
     Write-Host "  2) Prerequisite check" -ForegroundColor Cyan
-    Write-Host "  3) Debian package (x86)" -ForegroundColor Cyan
-    Write-Host "  4) Debian package (Raspberry Pi 4/5)" -ForegroundColor Cyan
-    Write-Host "  5) Debian package (Raspberry Pi Zero 2)" -ForegroundColor Cyan
-    Write-Host "  6) ISO image (x86)" -ForegroundColor Cyan
+    Write-Host "  3) Full x86 ISO build (.deb -> .iso)" -ForegroundColor Cyan
+    Write-Host "  4) Debian package only (x86)" -ForegroundColor Cyan
+    Write-Host "  5) Debian package only (Raspberry Pi 4/5)" -ForegroundColor Cyan
+    Write-Host "  6) Debian package only (Raspberry Pi Zero 2)" -ForegroundColor Cyan
     Write-Host "  7) Raspberry Pi image" -ForegroundColor Cyan
     Write-Host "  8) Raspberry Pi Zero 2 image" -ForegroundColor Cyan
     Write-Host "  9) QCOW2 image (x86)" -ForegroundColor Cyan
@@ -842,10 +843,10 @@ function Invoke-TargetPrompt {
     switch ($selection) {
         "1" { return "all" }
         "2" { return "check" }
-        "3" { return "deb-x86" }
-        "4" { return "deb-rpi" }
-        "5" { return "deb-rpi0" }
-        "6" { return "image-x86" }
+        "3" { return "image-x86" }
+        "4" { return "deb-x86" }
+        "5" { return "deb-rpi" }
+        "6" { return "deb-rpi0" }
         "7" { return "image-rpi" }
         "8" { return "image-rpi0" }
         "9" { return "qcow2" }

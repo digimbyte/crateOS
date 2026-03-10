@@ -160,13 +160,13 @@ Linux (in WSL):
 
 | File | Purpose |
 |------|---------|
-| `BUILD_SYSTEM.md` | Complete architecture guide |
-| `BUILD_QUICK_START.md` | Step-by-step instructions |
-| `BUILD_READINESS_REPORT.md` | Detailed code review |
-| `WINDOWS_SETUP.md` | Windows prerequisites guide |
+| `docs/build/BUILD_SYSTEM.md` | Complete architecture guide |
+| `docs/build/BUILD_QUICK_START.md` | Step-by-step instructions |
+| `docs/reports/BUILD_READINESS_REPORT.md` | Detailed code review |
+| `docs/setup/WINDOWS_SETUP.md` | Windows prerequisites guide |
 | `wsl-init.ps1` | Setup verification script |
 | `build.ps1` | Cross-platform build orchestrator |
-| `BUILD_STATUS.md` | This file |
+| `docs/reports/BUILD_STATUS.md` | This file |
 
 ---
 

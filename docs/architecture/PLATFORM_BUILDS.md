@@ -104,8 +104,8 @@ CrateOS/
 └── docs/
     ├── PLATFORM_SUPPORT.md                     # Platform specifications
     ├── MODULE_PLATFORM_CONSTRAINTS.md          # Module metadata schema
-    ├── PLATFORM_BUILD_QUICKSTART.md            # Quick reference
-    └── ARCHITECTURE_PLATFORM_BUILDS.md         # This document
+    ├── build/PLATFORM_BUILD_QUICKSTART.md      # Quick reference
+    └── architecture/PLATFORM_BUILDS.md         # This document
 ```
 
 ---
@@ -568,10 +568,10 @@ The architecture is designed to add new platforms easily:
 
 ## Documentation Cross-Reference
 
-- **Quick Start**: `PLATFORM_BUILD_QUICKSTART.md`
+- **Quick Start**: `docs/build/PLATFORM_BUILD_QUICKSTART.md`
 - **Platform Specs**: `docs/PLATFORM_SUPPORT.md`
 - **Module Constraints**: `docs/MODULE_PLATFORM_CONSTRAINTS.md`
-- **Build System**: `BUILD_SYSTEM.md` (original)
+- **Build System**: `docs/build/BUILD_SYSTEM.md`
 - **Module Registry**: `docs/MODULE_REGISTRY.md`
 - **Module Spec**: `docs/MODULE_SPEC.md`
 

@@ -249,13 +249,13 @@ ls /srv/crateos/state/platform-state.json  # check state
 
 The build system is documented with:
 
-1. **BUILD_SYSTEM.md** (this file)
+1. **docs/build/BUILD_SYSTEM.md**
    - Complete architecture and design
    - Requirements and dependencies
    - Troubleshooting guide
    - Verification instructions
 
-2. **BUILD_QUICK_START.md**
+2. **docs/build/BUILD_QUICK_START.md**
    - Step-by-step build instructions
    - Expected outputs
    - Common issues and fixes
@@ -315,9 +315,9 @@ The build system is documented with:
 
 **Ready to commit changes**:
 - Line ending fixes for bash scripts
-- BUILD_SYSTEM.md documentation
-- BUILD_QUICK_START.md documentation
-- BUILD_READINESS_REPORT.md (this file)
+- docs/build/BUILD_SYSTEM.md documentation
+- docs/build/BUILD_QUICK_START.md documentation
+- docs/reports/BUILD_READINESS_REPORT.md (this file)
 
 **No code changes needed** — build system is complete and correct.
 

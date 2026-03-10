@@ -17,7 +17,7 @@ CrateOS has been refactored to eliminate the internal HTTP API layer for user an
 
 ## Documentation Files
 
-### 1. **REFACTOR_SUMMARY.md** (This Repository Root)
+### 1. **docs/refactor/REFACTOR_SUMMARY.md**
 **Purpose**: Executive summary of the refactor  
 **Audience**: Project leads, architects, reviewers  
 **Contents**:
@@ -76,7 +76,7 @@ internal/tui/app.go                 (+200 LOC) - Direct management functions
 ```
 docs/INTERNAL_ARCHITECTURE.md       (337 LOC) - System architecture
 docs/TUI_MANAGEMENT_FUNCTIONS.md    (322 LOC) - Function reference
-REFACTOR_SUMMARY.md                 (240 LOC) - Refactor summary
+docs/refactor/REFACTOR_SUMMARY.md   (240 LOC) - Refactor summary
 ```
 
 ## Integration Points

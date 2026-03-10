@@ -317,6 +317,6 @@ TUI handlers:
 ## See Also
 
 - `docs/INTERNAL_ARCHITECTURE.md` - System design overview
-- `REFACTOR_SUMMARY.md` - Refactor rationale and changes
+- `docs/refactor/REFACTOR_SUMMARY.md` - Refactor rationale and changes
 - `internal/config/config.go` - Configuration package interface
 - `internal/tui/app.go` - Full TUI implementation
