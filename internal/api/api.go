@@ -801,57 +801,57 @@ func loadOwnershipDiagnostics() ownershipDiagnosticsView {
 				continue
 			}
 			view.Managed++
-			provisioning := state.LoadActorProvisioningState(svc.Name)
-			item := actorLifecycleDiagnosticView{
+			provisioningState := state.LoadActorProvisioningState(svc.Name)
+			workload := actorLifecycleDiagnosticView{
 				Crate:                 svc.Name,
-				ActorName:             strings.TrimSpace(provisioning.Actor.Name),
-				ActorType:             strings.TrimSpace(provisioning.Actor.Type),
-				ActorID:               strings.TrimSpace(provisioning.Actor.ID),
-				ActorUser:             strings.TrimSpace(provisioning.Actor.User),
-				ActorGroup:            strings.TrimSpace(provisioning.Actor.Group),
-				ActorHome:             strings.TrimSpace(provisioning.Actor.Home),
-				Provisioning:          strings.TrimSpace(provisioning.Provisioning),
-				ProvisioningError:     strings.TrimSpace(provisioning.Error),
-				ProvisioningUpdatedAt: strings.TrimSpace(provisioning.GeneratedAt),
-				LastSuccessAt:         strings.TrimSpace(provisioning.LastSuccessAt),
-				LastFailureAt:         strings.TrimSpace(provisioning.LastFailureAt),
-				RecentEvents:          make([]actorLifecycleEventDiagnosticView, 0, len(provisioning.Events)),
+				ActorName:             strings.TrimSpace(provisioningState.Actor.Name),
+				ActorType:             strings.TrimSpace(provisioningState.Actor.Type),
+				ActorID:               strings.TrimSpace(provisioningState.Actor.ID),
+				ActorUser:             strings.TrimSpace(provisioningState.Actor.User),
+				ActorGroup:            strings.TrimSpace(provisioningState.Actor.Group),
+				ActorHome:             strings.TrimSpace(provisioningState.Actor.Home),
+				Provisioning:          strings.TrimSpace(provisioningState.Provisioning),
+				ProvisioningError:     strings.TrimSpace(provisioningState.Error),
+				ProvisioningUpdatedAt: strings.TrimSpace(provisioningState.GeneratedAt),
+				LastSuccessAt:         strings.TrimSpace(provisioningState.LastSuccessAt),
+				LastFailureAt:         strings.TrimSpace(provisioningState.LastFailureAt),
+				RecentEvents:          make([]actorLifecycleEventDiagnosticView, 0, len(provisioningState.Events)),
 			}
-			for _, event := range provisioning.Events {
-				item.RecentEvents = append(item.RecentEvents, actorLifecycleEventDiagnosticView{
+			for _, event := range provisioningState.Events {
+				workload.RecentEvents = append(workload.RecentEvents, actorLifecycleEventDiagnosticView{
 					At:           strings.TrimSpace(event.At),
 					Provisioning: strings.TrimSpace(event.Provisioning),
 					Error:        strings.TrimSpace(event.Error),
 				})
 			}
-			if item.ActorName == "" {
-				item.ActorName = strings.TrimSpace(svc.Actor.Name)
+			if workload.ActorName == "" {
+				workload.ActorName = strings.TrimSpace(svc.Actor.Name)
 			}
-			item.ProvisioningStatePath = platform.CratePath("services", svc.Name, "runtime", "actor-provisioning.json")
+			workload.ProvisioningStatePath = platform.CratePath("services", svc.Name, "runtime", "actor-provisioning.json")
 			if claim, ok := claimsByCrate[strings.TrimSpace(svc.Name)]; ok {
-				item.OwnershipStatus = strings.TrimSpace(claim.Status)
-				item.OwnershipUpdatedAt = strings.TrimSpace(claim.UpdatedAt)
-				item.OwnershipRetiredAt = strings.TrimSpace(claim.RetiredAt)
-				if item.ActorName == "" {
-					item.ActorName = strings.TrimSpace(claim.Name)
+				workload.OwnershipStatus = strings.TrimSpace(claim.Status)
+				workload.OwnershipUpdatedAt = strings.TrimSpace(claim.UpdatedAt)
+				workload.OwnershipRetiredAt = strings.TrimSpace(claim.RetiredAt)
+				if workload.ActorName == "" {
+					workload.ActorName = strings.TrimSpace(claim.Name)
 				}
-				if item.ActorType == "" {
-					item.ActorType = strings.TrimSpace(claim.Type)
+				if workload.ActorType == "" {
+					workload.ActorType = strings.TrimSpace(claim.Type)
 				}
-				if item.ActorID == "" {
-					item.ActorID = strings.TrimSpace(claim.ID)
+				if workload.ActorID == "" {
+					workload.ActorID = strings.TrimSpace(claim.ID)
 				}
-				if item.ActorUser == "" {
-					item.ActorUser = strings.TrimSpace(claim.User)
+				if workload.ActorUser == "" {
+					workload.ActorUser = strings.TrimSpace(claim.User)
 				}
-				if item.ActorGroup == "" {
-					item.ActorGroup = strings.TrimSpace(claim.Group)
+				if workload.ActorGroup == "" {
+					workload.ActorGroup = strings.TrimSpace(claim.Group)
 				}
-				if item.ActorHome == "" {
-					item.ActorHome = strings.TrimSpace(claim.Home)
+				if workload.ActorHome == "" {
+					workload.ActorHome = strings.TrimSpace(claim.Home)
 				}
 			}
-			switch item.Provisioning {
+			switch workload.Provisioning {
 			case "provisioned":
 				view.Provisioned++
 			case "blocked":
@@ -859,7 +859,7 @@ func loadOwnershipDiagnostics() ownershipDiagnosticsView {
 			default:
 				view.Pending++
 			}
-			view.Workloads = append(view.Workloads, item)
+			view.Workloads = append(view.Workloads, workload)
 		}
 	}
 	return view

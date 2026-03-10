@@ -107,6 +107,11 @@ func runReconcile() {
 		log.Printf("reconcile: %d actions applied", len(actions))
 	}
 
+	// Write watchdog state file to indicate agent health
+	if err := writeWatchdogState(); err != nil {
+		log.Printf("watchdog state write error: %v", err)
+	}
+
 	// Export curated logs from journald
 	if err := logs.ExportAll(); err != nil {
 		log.Printf("log export error: %v", err)
@@ -135,6 +140,20 @@ func writeInstalledMarker() error {
 	data := map[string]interface{}{
 		"version":      platform.Version,
 		"installed_at": time.Now().UTC().Format(time.RFC3339),
+	}
+	b, err := json.MarshalIndent(data, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(p, b, 0644)
+}
+
+// writeWatchdogState writes state/agent-watchdog.json to indicate agent liveliness.
+func writeWatchdogState() error {
+	p := platform.CratePath("state", "agent-watchdog.json")
+	data := map[string]interface{}{
+		"checked_at": time.Now().UTC().Format(time.RFC3339),
+		"status":     "alive",
 	}
 	b, err := json.MarshalIndent(data, "", "  ")
 	if err != nil {

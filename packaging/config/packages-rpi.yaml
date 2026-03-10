@@ -1,0 +1,103 @@
+# CrateOS Raspberry Pi 4/5 package policy
+# Platform: Raspberry Pi OS 64-bit (Bookworm)
+#
+# RPi platform has:
+# - Quad-core ARM64 CPU (throttled at 1.8GHz)
+# - 4GB RAM
+# - MicroSD card I/O (slower than NVMe)
+# - GPIO/SPI/I2C hardware interfaces
+# - Thermal constraints on compact form factor
+
+required:
+  # --- Core platform ---
+  - openssh-server
+  - network-manager
+  - nftables
+  - openssl
+  - ca-certificates
+
+  # --- Base utilities ---
+  - curl
+  - wget
+  - jq
+  - yq
+  - git
+  - rsync
+  - dos2unix
+  - lsof
+
+  # --- Time/updates/maintenance ---
+  - chrony
+  - unattended-upgrades
+  - needrestart
+  - logrotate
+
+  # --- Diagnostics (reduced for ARM) ---
+  # Core diagnostics only, exclude heavy tools
+  - btop                           # Lightweight top alternative
+  - ncdu                           # Disk usage
+  - ethtool                        # Network diagnostics
+  - dnsutils                       # DNS tools
+  - iperf3                         # Network bandwidth test
+  # Excluded: smartmontools (x86 SMART only), nvme-cli, fancontrol
+
+  # --- Security & access ---
+  - fail2ban
+  - wireguard
+
+  # --- Ops tooling (reduced) ---
+  - tmux
+  - build-essential                # Keep for edge compilation
+  - pkg-config
+  - python3
+  - python3-venv
+  - python3-pip
+  - powershell
+
+optional:
+  # --- Web hosting / reverse proxy (opt-in) ---
+  - nginx
+
+  # --- Containers (limited on RPi 4/5) ---
+  - docker.io                      # Supported but resource-heavy
+  - docker-compose-plugin
+
+  # --- Databases / data services (opt-in, with caveats) ---
+  # PostgreSQL can run but performance is limited
+  - postgres
+
+  # --- Email / alerts (opt-in) ---
+  - msmtp
+
+  # --- VPN / tunnels (opt-in) ---
+  - wireguard
+  - cloudflared
+
+  # --- Terminal extras (opt-in) ---
+  - screen
+
+excluded:
+  # Explicitly exclude x86-specific tools
+  - lightdm                        # No GUI on RPi, too resource-intensive
+  - cockpit                        # UI not suited for headless RPi
+  - qemu-system-x86               # No x86 virtualization on ARM
+  - libvirt-daemon
+  - virt-manager
+  - ffmpeg                         # Too slow on ARM, use GPU decoder if needed
+  - imagemagick                    # CPU-intensive, replace with ImageMagick7
+  - lm-sensors                     # x86 thermal monitoring not applicable
+  - smartmontools                  # x86 SMART drives not applicable
+  - nvme-cli                       # No NVMe on RPi
+  - fancontrol                     # No fans on typical RPi setup
+  - hddtemp                        # Not applicable
+  - pciutils                       # RPi uses GPIO, not PCI
+  - usbutils                       # Rarely needed
+
+recommendations:
+  # For GPIO/hardware projects
+  - python3-gpiozero              # Python GPIO library
+  - rpi.gpio                      # Direct GPIO access (optional)
+  
+  # For media/camera (if using camera module)
+  - libcamera                     # Camera support
+  - libcamera-apps                # Camera tools

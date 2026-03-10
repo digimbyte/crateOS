@@ -3,24 +3,86 @@ GOFLAGS  ?= -trimpath
 DIST     := dist
 BIN      := $(DIST)/bin
 
+# Platform selection (x86, rpi, rpi0)
+PLATFORM ?= x86
+
+# Platform-specific GOOS/GOARCH
+ifeq ($(PLATFORM),x86)
+  GOOS   ?= linux
+  GOARCH ?= amd64
+  VERSION ?= 0.1.0+noble1
+else ifeq ($(PLATFORM),rpi)
+  GOOS   ?= linux
+  GOARCH ?= arm64
+  VERSION ?= 0.1.0+rpi1
+else ifeq ($(PLATFORM),rpi0)
+  GOOS   ?= linux
+  GOARCH ?= arm64
+  VERSION ?= 0.1.0+rpi0-1
+endif
+
 CMDS     := crateos crateos-agent crateos-policy
 DEB_PKGS := crateos crateos-agent crateos-policy
 
-.PHONY: all build deb iso qcow2 rpi clean
+.PHONY: all build build-x86 build-rpi build-rpi0 deb deb-x86 deb-rpi deb-rpi0 iso image-x86 image-rpi image-rpi0 qcow2 rpi clean
 
 all: build
+
+help:
+	@echo "CrateOS Build System"
+	@echo "Usage: make [PLATFORM=x86|rpi|rpi0] [target]"
+	@echo ""
+	@echo "Targets:"
+	@echo "  build              Build binaries for current PLATFORM (default: x86)"
+	@echo "  build-x86          Build x86 binaries"
+	@echo "  build-rpi          Build Raspberry Pi binaries"
+	@echo "  build-rpi0         Build Raspberry Pi Zero 2 binaries"
+	@echo "  deb                Build .deb packages for current PLATFORM"
+	@echo "  deb-x86            Build x86 .deb packages"
+	@echo "  deb-rpi            Build Raspberry Pi .deb packages"
+	@echo "  deb-rpi0           Build Raspberry Pi Zero 2 .deb packages"
+	@echo "  image-x86          Build x86 ISO image"
+	@echo "  image-rpi          Build Raspberry Pi OS image"
+	@echo "  image-rpi0         Build Raspberry Pi Zero 2 OS image"
+	@echo "  qcow2              Build QCOW2 VM image (x86 only)"
+	@echo "  clean              Remove dist/ directory"
+	@echo ""
+	@echo "Examples:"
+	@echo "  make PLATFORM=x86 image-x86"
+	@echo "  make PLATFORM=rpi deb-rpi"
+	@echo "  make PLATFORM=rpi0 build-rpi0"
 
 # ── Build ────────────────────────────────────────────────────────────
 build: $(addprefix $(BIN)/,$(CMDS))
 
-LDFLAGS  := -X github.com/crateos/crateos/internal/platform.Version=$(VERSION)
+build-x86: PLATFORM := x86
+build-x86: build
+
+build-rpi: PLATFORM := rpi
+build-rpi: build
+
+build-rpi0: PLATFORM := rpi0
+build-rpi0: build
+
+LDFLAGS  := -X github.com/crateos/crateos/internal/platform.Version=$(VERSION) -X github.com/crateos/crateos/internal/platform.BuildTarget=$(PLATFORM)
 
 $(BIN)/%: cmd/%/main.go
 	@mkdir -p $(BIN)
-	go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $@ ./cmd/$*
+	GOOS=$(GOOS) GOARCH=$(GOARCH) go build $(GOFLAGS) -ldflags "$(LDFLAGS)" -o $@ ./cmd/$*
 
-# ── Debian packages ──────────────────────────────────────────────────
-deb: build
+# ── Debian packages ──────────────────────────────────────────
+deb: build package-deb
+
+deb-x86: PLATFORM := x86
+deb-x86: deb
+
+deb-rpi: PLATFORM := rpi
+deb-rpi: deb
+
+deb-rpi0: PLATFORM := rpi0
+deb-rpi0: deb
+
+package-deb: build
 	@for pkg in $(DEB_PKGS); do \
 		echo "==> packaging $$pkg"; \
 		staging=$(DIST)/deb-staging/$$pkg; \
@@ -55,21 +117,30 @@ deb: build
 	done
 	@echo "==> .deb packages written to $(DIST)/"
 
-# ── ISO (autoinstall) ───────────────────────────────────────────────
-iso: deb
-	@echo "==> building autoinstall ISO"
-	bash images/iso/build.sh
+# ── Image builders (platform-specific) ────────────────────────────────────────────────────
+image-x86: deb-x86
+	@echo "==> building x86 autoinstall ISO"
+	bash images/x86/build.sh
 	@echo "==> ISO written to $(DIST)/"
 
-# ── qcow2 VM image ──────────────────────────────────────────────────
-qcow2: deb
+iso: image-x86
+
+image-rpi: deb-rpi
+	@echo "==> building Raspberry Pi image"
+	bash images/rpi/build.sh
+	@echo "==> RPi image written to $(DIST)/"
+
+image-rpi0: deb-rpi0
+	@echo "==> building Raspberry Pi Zero 2 image"
+	bash images/rpi0/build.sh
+	@echo "==> RPi0 image written to $(DIST)/"
+
+qcow2: deb-x86
 	@echo "==> building qcow2 image"
 	bash images/qcow2/build.sh
 	@echo "==> qcow2 written to $(DIST)/"
 
-# ── Raspberry Pi (stub) ─────────────────────────────────────────────
-rpi:
-	@echo "rpi target not yet implemented"
+rpi: image-rpi
 
 # ── Cleanup ──────────────────────────────────────────────────────────
 clean:

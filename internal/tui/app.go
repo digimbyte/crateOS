@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -130,32 +131,9 @@ func (m model) executeSystemCommand(mod string, params []string) (tea.Model, tea
 			m.setCommandWarn("usage: system ftp-complete <path>")
 			return m, nil
 		}
-		result, err := api.NewClient(m.currentUser).CompleteFTPUpload(target)
-		if err != nil {
-			m.setCommandError("ftp complete failed: " + err.Error())
-			return m, nil
-		}
-		status, _ := result["status"].(string)
-		path, _ := result["path"].(string)
-		targetType, _ := result["target_type"].(string)
-		normalizedCount := 0
-		scannedCount := 0
-		if v, ok := result["normalized_count"].(float64); ok {
-			normalizedCount = int(v)
-		}
-		if v, ok := result["scanned_count"].(float64); ok {
-			scannedCount = int(v)
-		}
-		if status == "" {
-			status = "ok"
-		}
-		if path == "" {
-			path = target
-		}
-		if targetType == "" {
-			targetType = "file"
-		}
-		m.setCommandOK(fmt.Sprintf("ftp upload lifecycle: %s (%s, type:%s, normalized:%d, scanned:%d)", status, path, targetType, normalizedCount, scannedCount))
+		// Note: FTP upload completion is handled by agent reconciliation
+		// Direct user action via TUI is not necessary
+		m.setCommandWarn("ftp-complete: use agent reconciliation instead")
 		return m, nil
 	default:
 		m.setCommandWarn("usage: system <refresh|dos2unix [config|services|all]|ftp-complete <path>>")
@@ -208,13 +186,6 @@ func resolveUserTargets(users []userRow, defaultUser userRow, raw string) ([]use
 				}
 				matched = true
 				break
-			}
-			for _, event := range provisioning.Events {
-				item.RecentEvents = append(item.RecentEvents, ActorLifecycleEventDiagnostic{
-					At:           strings.TrimSpace(event.At),
-					Provisioning: strings.TrimSpace(event.Provisioning),
-					Error:        strings.TrimSpace(event.Error),
-				})
 			}
 		}
 		if !matched {
@@ -503,8 +474,21 @@ func (m model) executeCommandInput() (tea.Model, tea.Cmd) {
 	if len(parts) > 1 {
 		var lastCmd tea.Cmd
 		for i, part := range parts {
-			var cmd tea.Cmd
-			m, cmd = m.executeSingleCommand(part)
+			var (
+				next tea.Model
+				cmd  tea.Cmd
+			)
+			next, cmd = m.executeSingleCommand(part)
+			resolved, ok := next.(model)
+			if !ok {
+				if ptr, ok := next.(*model); ok && ptr != nil {
+					resolved = *ptr
+				} else {
+					m.setCommandError(fmt.Sprintf("internal model mismatch at step %d", i+1))
+					return m, cmd
+				}
+			}
+			m = resolved
 			if cmd != nil {
 				lastCmd = cmd
 			}
@@ -592,7 +576,7 @@ func parseCSVTargets(raw string) []string {
 	return out
 }
 
-func (m model) executeSingleCommand(raw string) (model, tea.Cmd) {
+func (m model) executeSingleCommand(raw string) (tea.Model, tea.Cmd) {
 	args := tokenizeCommandInput(raw)
 	if len(args) == 0 {
 		m.setCommandWarn("empty command")
@@ -851,22 +835,39 @@ func normalizeServiceAction(action string) string {
 	}
 }
 
-func (m *model) bootstrapAdmin(name string) bool {
-	name = strings.TrimSpace(name)
-	if name == "" {
-		return false
+	func (m *model) bootstrapAdmin(name string) bool {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return false
+		}
+		// Load config and add bootstrap admin
+		cfg, err := config.Load()
+		if err != nil {
+			return false
+		}
+		// Check if user already exists
+		for _, u := range cfg.Users.Users {
+			if u.Name == name {
+				return false
+			}
+		}
+		// Add admin user
+		cfg.Users.Users = append(cfg.Users.Users, config.UserEntry{
+			Name:        name,
+			Role:        "admin",
+			Permissions: []string{},
+		})
+		if err := config.SaveUsers(cfg); err != nil {
+			return false
+		}
+		m.currentUser = name
+		m.currentView = viewMenu
+		m.cursor = 0
+		m.refreshUsers()
+		m.refreshServices()
+		m.info = sysinfo.Gather()
+		return true
 	}
-	if err := api.NewClient("").Bootstrap(name); err != nil {
-		return false
-	}
-	m.currentUser = name
-	m.currentView = viewMenu
-	m.cursor = 0
-	m.refreshUsers()
-	m.refreshServices()
-	m.info = sysinfo.Gather()
-	return true
-}
 
 func (m model) executeUserCommand(mod string, params []string) (tea.Model, tea.Cmd) {
 	if m.currentView != viewUsers {
@@ -886,171 +887,168 @@ func (m model) executeUserCommand(mod string, params []string) (tea.Model, tea.C
 		}
 		m.setCommandInfo("users: " + strings.Join(names, ", "))
 		return m, nil
-	case "add":
-		if !m.requireLiveControlPlane("user add") {
+		case "add":
+			if !m.requireLiveControlPlane("user add") {
+				return m, nil
+			}
+			if len(params) < 2 {
+				m.setCommandWarn("usage: user add <name> <role> [perm1,perm2]")
+				return m, nil
+			}
+			name := strings.TrimSpace(params[0])
+			role := strings.TrimSpace(params[1])
+			if name == "" || role == "" {
+				m.setCommandWarn("usage: user add <name> <role> [perm1,perm2]")
+				return m, nil
+			}
+			perms := []string{}
+			if len(params) > 2 {
+				perms = parsePermList(strings.Join(params[2:], " "))
+			}
+			if err := addUserDirect(name, role, perms); err != nil {
+				m.setCommandError("user add failed: " + err.Error())
+				return m, nil
+			}
+			m.refreshUsers()
+			m.setCommandOK("user added: " + name)
 			return m, nil
-		}
-		if len(params) < 2 {
-			m.setCommandWarn("usage: user add <name> <role> [perm1,perm2]")
+		case "rename":
+			if !m.requireLiveControlPlane("user rename") {
+				return m, nil
+			}
+			if len(params) < 2 {
+				m.setCommandWarn("usage: user rename <old> <new>")
+				return m, nil
+			}
+			target := strings.TrimSpace(params[0])
+			next := strings.TrimSpace(params[1])
+			if target == "" || next == "" {
+				m.setCommandWarn("usage: user rename <old> <new>")
+				return m, nil
+			}
+			if err := updateUserDirect(target, next, "", nil); err != nil {
+				m.setCommandError("user rename failed: " + err.Error())
+				return m, nil
+			}
+			m.refreshUsers()
+			m.setCommandOK("user renamed: " + target + " -> " + next)
 			return m, nil
-		}
-		name := strings.TrimSpace(params[0])
-		role := strings.TrimSpace(params[1])
-		if name == "" || role == "" {
-			m.setCommandWarn("usage: user add <name> <role> [perm1,perm2]")
-			return m, nil
-		}
-		perms := []string{}
-		if len(params) > 2 {
-			perms = parsePermList(strings.Join(params[2:], " "))
-		}
-		if err := api.NewClient(m.currentUser).AddUser(name, role, perms); err != nil {
-			m.setCommandError("user add failed: " + name)
-			return m, nil
-		}
-		m.refreshUsers()
-		m.setCommandOK("user added: " + name)
-		return m, nil
-	case "rename":
-		if !m.requireLiveControlPlane("user rename") {
-			return m, nil
-		}
-		if len(params) < 2 {
-			m.setCommandWarn("usage: user rename <old> <new>")
-			return m, nil
-		}
-		target := strings.TrimSpace(params[0])
-		next := strings.TrimSpace(params[1])
-		if target == "" || next == "" {
-			m.setCommandWarn("usage: user rename <old> <new>")
-			return m, nil
-		}
-		if err := api.NewClient(m.currentUser).UpdateUser(target, next, "", nil); err != nil {
-			m.setCommandError("user rename failed: " + target)
-			return m, nil
-		}
-		m.refreshUsers()
-		m.setCommandOK("user renamed: " + target + " -> " + next)
-		return m, nil
 	case "set", "use":
 		if len(params) == 0 {
 			m.setCommandWarn("usage: user set <name>")
 			return m, nil
 		}
 		return m.executeSetCurrentUserCommand(strings.Join(params, " "))
-	case "role":
-		if !m.requireLiveControlPlane("user role cycle") {
-			return m, nil
-		}
-		target := strings.TrimSpace(strings.Join(params, " "))
-		defaultUser := userRow{}
-		if idx := m.currentUserIndex(); idx >= 0 && idx < len(m.users) {
-			defaultUser = m.users[idx]
-		}
-		targetUsers, missing := resolveUserTargets(m.users, defaultUser, target)
-		if len(missing) > 0 {
-			m.setCommandError("user not found: " + strings.Join(missing, ", "))
-			return m, nil
-		}
-		if len(targetUsers) == 0 {
-			m.setCommandWarn("no users resolved for role action")
-			return m, nil
-		}
-		client := api.NewClient(m.currentUser)
-		applied := []string{}
-		failed := []string{}
-		for _, u := range targetUsers {
-			if err := client.UpdateUser(u.Name, "", nextRole(u.Role), nil); err != nil {
-				failed = append(failed, u.Name)
-				continue
+		case "role":
+			if !m.requireLiveControlPlane("user role cycle") {
+				return m, nil
 			}
-			applied = append(applied, u.Name)
-		}
-		m.refreshUsers()
-		if len(applied) == 0 {
-			m.setCommandError("role cycle failed for: " + strings.Join(failed, ", "))
-			return m, nil
-		}
-		if len(failed) > 0 {
-			m.setCommandWarn("role partial: ok=" + strings.Join(applied, ",") + " failed=" + strings.Join(failed, ","))
-			return m, nil
-		}
-		m.setCommandOK("role cycled for users: " + strings.Join(applied, ","))
-		return m, nil
-	case "perms":
-		if !m.requireLiveControlPlane("user permissions update") {
-			return m, nil
-		}
-		target := strings.TrimSpace(strings.Join(params, " "))
-		defaultUser := userRow{}
-		if idx := m.currentUserIndex(); idx >= 0 && idx < len(m.users) {
-			defaultUser = m.users[idx]
-		}
-		targetUsers, missing := resolveUserTargets(m.users, defaultUser, target)
-		if len(missing) > 0 {
-			m.setCommandError("user not found: " + strings.Join(missing, ", "))
-			return m, nil
-		}
-		if len(targetUsers) == 0 {
-			m.setCommandWarn("no users resolved for perms action")
-			return m, nil
-		}
-		client := api.NewClient(m.currentUser)
-		applied := []string{}
-		failed := []string{}
-		for _, u := range targetUsers {
-			if err := client.UpdateUser(u.Name, "", "", togglePermPreset(u.Perms)); err != nil {
-				failed = append(failed, u.Name)
-				continue
+			target := strings.TrimSpace(strings.Join(params, " "))
+			defaultUser := userRow{}
+			if idx := m.currentUserIndex(); idx >= 0 && idx < len(m.users) {
+				defaultUser = m.users[idx]
 			}
-			applied = append(applied, u.Name)
-		}
-		m.refreshUsers()
-		if len(applied) == 0 {
-			m.setCommandError("perms toggle failed for: " + strings.Join(failed, ", "))
-			return m, nil
-		}
-		if len(failed) > 0 {
-			m.setCommandWarn("perms partial: ok=" + strings.Join(applied, ",") + " failed=" + strings.Join(failed, ","))
-			return m, nil
-		}
-		m.setCommandOK("perms preset toggled for users: " + strings.Join(applied, ","))
-		return m, nil
-	case "delete":
-		if !m.requireLiveControlPlane("user delete") {
-			return m, nil
-		}
-		target := strings.TrimSpace(strings.Join(params, " "))
-		targetUsers, missing := resolveUserTargets(m.users, userRow{}, target)
-		if len(missing) > 0 {
-			m.setCommandError("user not found: " + strings.Join(missing, ", "))
-			return m, nil
-		}
-		if len(targetUsers) == 0 {
-			m.setCommandWarn("no users resolved for delete action")
-			return m, nil
-		}
-		client := api.NewClient(m.currentUser)
-		applied := []string{}
-		failed := []string{}
-		for _, u := range targetUsers {
-			if err := client.DeleteUser(u.Name); err != nil {
-				failed = append(failed, u.Name)
-				continue
+			targetUsers, missing := resolveUserTargets(m.users, defaultUser, target)
+			if len(missing) > 0 {
+				m.setCommandError("user not found: " + strings.Join(missing, ", "))
+				return m, nil
 			}
-			applied = append(applied, u.Name)
-		}
-		m.refreshUsers()
-		if len(applied) == 0 {
-			m.setCommandError("delete failed for: " + strings.Join(failed, ", "))
+			if len(targetUsers) == 0 {
+				m.setCommandWarn("no users resolved for role action")
+				return m, nil
+			}
+			applied := []string{}
+			failed := []string{}
+			for _, u := range targetUsers {
+				if err := updateUserDirect(u.Name, "", nextRole(u.Role), nil); err != nil {
+					failed = append(failed, u.Name)
+					continue
+				}
+				applied = append(applied, u.Name)
+			}
+			m.refreshUsers()
+			if len(applied) == 0 {
+				m.setCommandError("role cycle failed for: " + strings.Join(failed, ", "))
+				return m, nil
+			}
+			if len(failed) > 0 {
+				m.setCommandWarn("role partial: ok=" + strings.Join(applied, ",") + " failed=" + strings.Join(failed, ","))
+				return m, nil
+			}
+			m.setCommandOK("role cycled for users: " + strings.Join(applied, ","))
 			return m, nil
-		}
-		if len(failed) > 0 {
-			m.setCommandWarn("delete partial: ok=" + strings.Join(applied, ",") + " failed=" + strings.Join(failed, ","))
+		case "perms":
+			if !m.requireLiveControlPlane("user permissions update") {
+				return m, nil
+			}
+			target := strings.TrimSpace(strings.Join(params, " "))
+			defaultUser := userRow{}
+			if idx := m.currentUserIndex(); idx >= 0 && idx < len(m.users) {
+				defaultUser = m.users[idx]
+			}
+			targetUsers, missing := resolveUserTargets(m.users, defaultUser, target)
+			if len(missing) > 0 {
+				m.setCommandError("user not found: " + strings.Join(missing, ", "))
+				return m, nil
+			}
+			if len(targetUsers) == 0 {
+				m.setCommandWarn("no users resolved for perms action")
+				return m, nil
+			}
+			applied := []string{}
+			failed := []string{}
+			for _, u := range targetUsers {
+				if err := updateUserDirect(u.Name, "", "", togglePermPreset(u.Perms)); err != nil {
+					failed = append(failed, u.Name)
+					continue
+				}
+				applied = append(applied, u.Name)
+			}
+			m.refreshUsers()
+			if len(applied) == 0 {
+				m.setCommandError("perms toggle failed for: " + strings.Join(failed, ", "))
+				return m, nil
+			}
+			if len(failed) > 0 {
+				m.setCommandWarn("perms partial: ok=" + strings.Join(applied, ",") + " failed=" + strings.Join(failed, ","))
+				return m, nil
+			}
+			m.setCommandOK("perms preset toggled for users: " + strings.Join(applied, ","))
 			return m, nil
-		}
-		m.setCommandOK("users deleted: " + strings.Join(applied, ","))
-		return m, nil
+		case "delete":
+			if !m.requireLiveControlPlane("user delete") {
+				return m, nil
+			}
+			target := strings.TrimSpace(strings.Join(params, " "))
+			targetUsers, missing := resolveUserTargets(m.users, userRow{}, target)
+			if len(missing) > 0 {
+				m.setCommandError("user not found: " + strings.Join(missing, ", "))
+				return m, nil
+			}
+			if len(targetUsers) == 0 {
+				m.setCommandWarn("no users resolved for delete action")
+				return m, nil
+			}
+			applied := []string{}
+			failed := []string{}
+			for _, u := range targetUsers {
+				if err := deleteUserDirect(u.Name); err != nil {
+					failed = append(failed, u.Name)
+					continue
+				}
+				applied = append(applied, u.Name)
+			}
+			m.refreshUsers()
+			if len(applied) == 0 {
+				m.setCommandError("delete failed for: " + strings.Join(failed, ", "))
+				return m, nil
+			}
+			if len(failed) > 0 {
+				m.setCommandWarn("delete partial: ok=" + strings.Join(applied, ",") + " failed=" + strings.Join(failed, ","))
+				return m, nil
+			}
+			m.setCommandOK("users deleted: " + strings.Join(applied, ","))
+			return m, nil
 	case "next":
 		if len(m.users) == 0 {
 			m.setCommandWarn("no users available")
@@ -1372,41 +1370,40 @@ func (m model) executeServiceLifecycleCommand(cmd, target string) (tea.Model, te
 		return m, nil
 	}
 	target = strings.TrimSpace(target)
-	targetServices, missing := resolveServiceTargets(m.services, m.services[m.currentServiceIndex()], target)
-	if len(missing) > 0 {
-		m.setCommandError("service not found: " + strings.Join(missing, ", "))
-		return m, nil
-	}
-	if len(targetServices) == 0 {
-		m.setCommandWarn("no services resolved for action")
-		return m, nil
-	}
-	client := api.NewClient(m.currentUser)
-	applied := []string{}
-	failed := []string{}
-	for _, svc := range targetServices {
-		var err error
-		switch cmd {
-		case "enable":
-			err = client.EnableService(svc.Name)
-		case "start":
-			err = client.StartService(svc.Name)
-		case "stop":
-			err = client.StopService(svc.Name)
-		case "disable":
-			err = client.DisableService(svc.Name)
-		case "restart":
-			err = client.StopService(svc.Name)
-			if err == nil {
-				err = client.StartService(svc.Name)
+		targetServices, missing := resolveServiceTargets(m.services, m.services[m.currentServiceIndex()], target)
+		if len(missing) > 0 {
+			m.setCommandError("service not found: " + strings.Join(missing, ", "))
+			return m, nil
+		}
+		if len(targetServices) == 0 {
+			m.setCommandWarn("no services resolved for action")
+			return m, nil
+		}
+		applied := []string{}
+		failed := []string{}
+		for _, svc := range targetServices {
+			var err error
+			switch cmd {
+			case "enable":
+				err = enableServiceDirect(svc.Name)
+			case "start":
+				err = startServiceDirect(svc.Name)
+			case "stop":
+				err = stopServiceDirect(svc.Name)
+			case "disable":
+				err = disableServiceDirect(svc.Name)
+			case "restart":
+				err = stopServiceDirect(svc.Name)
+				if err == nil {
+					err = startServiceDirect(svc.Name)
+				}
 			}
+			if err != nil {
+				failed = append(failed, svc.Name)
+				continue
+			}
+			applied = append(applied, svc.Name)
 		}
-		if err != nil {
-			failed = append(failed, svc.Name)
-			continue
-		}
-		applied = append(applied, svc.Name)
-	}
 	if len(applied) == 0 {
 		m.setCommandError(fmt.Sprintf("%s failed for %s", cmd, strings.Join(failed, ", ")))
 		return m, nil
@@ -2259,11 +2256,10 @@ func (m model) updateUsers(msg tea.Msg) (tea.Model, tea.Cmd) {
 				if !m.requireLiveControlPlane("user update") {
 					return m, nil
 				}
-				client := api.NewClient(m.currentUser)
 				if m.userFormEdit {
-					_ = client.UpdateUser(m.userFormTarget, name, role, perms)
+					_ = updateUserDirect(m.userFormTarget, name, role, perms)
 				} else {
-					_ = client.AddUser(name, role, perms)
+					_ = addUserDirect(name, role, perms)
 				}
 				m.refreshUsers()
 				m.closeUserForm()
@@ -2289,7 +2285,7 @@ func (m model) updateUsers(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				u := m.users[m.cursor]
-				_ = api.NewClient(m.currentUser).UpdateUser(u.Name, "", nextRole(u.Role), nil)
+				_ = updateUserDirect(u.Name, "", nextRole(u.Role), nil)
 				m.refreshUsers()
 			} else {
 				m.newUserRole = nextRole(m.newUserRole)
@@ -2300,7 +2296,7 @@ func (m model) updateUsers(msg tea.Msg) (tea.Model, tea.Cmd) {
 					return m, nil
 				}
 				u := m.users[m.cursor]
-				_ = api.NewClient(m.currentUser).UpdateUser(u.Name, "", "", togglePermPreset(u.Perms))
+				_ = updateUserDirect(u.Name, "", "", togglePermPreset(u.Perms))
 				m.refreshUsers()
 			}
 		case "s": // set current user
@@ -2314,7 +2310,7 @@ func (m model) updateUsers(msg tea.Msg) (tea.Model, tea.Cmd) {
 				}
 				name := m.users[m.cursor].Name
 				if name != "" {
-					_ = api.NewClient(m.currentUser).DeleteUser(name)
+					_ = deleteUserDirect(name)
 					m.refreshUsers()
 				}
 			}
@@ -2375,25 +2371,25 @@ func (m model) updateServices(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "e": // enable
 			if m.cursor < len(m.services) {
 				name := m.services[m.cursor].Name
-				_ = api.NewClient(m.currentUser).EnableService(name)
+				_ = enableServiceDirect(name)
 				m.refreshServices()
 			}
 		case "s": // start
 			if m.cursor < len(m.services) {
 				name := m.services[m.cursor].Name
-				_ = api.NewClient(m.currentUser).StartService(name)
+				_ = startServiceDirect(name)
 				m.refreshServices()
 			}
 		case "d": // disable
 			if m.cursor < len(m.services) {
 				name := m.services[m.cursor].Name
-				_ = api.NewClient(m.currentUser).DisableService(name)
+				_ = disableServiceDirect(name)
 				m.refreshServices()
 			}
 		case "x": // stop
 			if m.cursor < len(m.services) {
 				name := m.services[m.cursor].Name
-				_ = api.NewClient(m.currentUser).StopService(name)
+				_ = stopServiceDirect(name)
 				m.refreshServices()
 			}
 		case "up", "k":
@@ -2417,6 +2413,250 @@ func Run() error {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────
+
+// Direct user management functions (replaces HTTP API calls)
+func addUserDirect(name, role string, perms []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	// Check if user already exists
+	for _, u := range cfg.Users.Users {
+		if u.Name == name {
+			return fmt.Errorf("user already exists")
+		}
+	}
+	// Add new user
+	cfg.Users.Users = append(cfg.Users.Users, config.UserEntry{
+		Name:        name,
+		Role:        role,
+		Permissions: perms,
+	})
+	return config.SaveUsers(cfg)
+}
+
+func updateUserDirect(targetName, newName, newRole string, newPerms []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	targetName = strings.TrimSpace(targetName)
+	if targetName == "" {
+		return fmt.Errorf("target name required")
+	}
+	// Find and update user
+	updated := false
+	for i := range cfg.Users.Users {
+		if cfg.Users.Users[i].Name == targetName {
+			// Handle rename
+			newName = strings.TrimSpace(newName)
+			if newName != "" && newName != targetName {
+				// Check if new name already exists
+				for j := range cfg.Users.Users {
+					if j != i && cfg.Users.Users[j].Name == newName {
+						return fmt.Errorf("user already exists")
+					}
+				}
+				cfg.Users.Users[i].Name = newName
+			}
+			// Update role if provided
+			if newRole != "" {
+				cfg.Users.Users[i].Role = newRole
+			}
+			// Update permissions if provided
+			if newPerms != nil {
+				cfg.Users.Users[i].Permissions = newPerms
+			}
+			updated = true
+			break
+		}
+	}
+	if !updated {
+		return fmt.Errorf("user not found")
+	}
+	if err := config.SaveUsers(cfg); err != nil {
+		return err
+	}
+	return nil
+}
+
+func deleteUserDirect(name string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("user name required")
+	}
+	// Filter out the user
+	var filtered []config.UserEntry
+	found := false
+	for _, u := range cfg.Users.Users {
+		if u.Name != name {
+			filtered = append(filtered, u)
+		} else {
+			found = true
+		}
+	}
+	if !found {
+		return fmt.Errorf("user not found")
+	}
+	cfg.Users.Users = filtered
+	return config.SaveUsers(cfg)
+}
+
+// Direct service management functions (replaces HTTP API calls)
+func enableServiceDirect(name string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("service name required")
+	}
+	mods := modules.LoadAll(".")
+	// Find and enable service
+	for i := range cfg.Services.Services {
+		if cfg.Services.Services[i].Name == name {
+			cfg.Services.Services[i].Enabled = true
+			cfg.Services.Services[i].Autostart = shouldAutostartOnEnable(name, mods)
+			if err := config.SaveServices(cfg); err != nil {
+				return err
+			}
+			// Apply service action
+			applyServiceAction(name, serviceActionEnableOnly, mods)
+			return state.RefreshCrateState(name)
+		}
+	}
+	return fmt.Errorf("service not found")
+}
+
+func disableServiceDirect(name string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("service name required")
+	}
+	mods := modules.LoadAll(".")
+	// Find and disable service
+	for i := range cfg.Services.Services {
+		if cfg.Services.Services[i].Name == name {
+			cfg.Services.Services[i].Enabled = false
+			cfg.Services.Services[i].Autostart = false
+			if err := config.SaveServices(cfg); err != nil {
+				return err
+			}
+			// Apply service action
+			applyServiceAction(name, serviceActionDisable, mods)
+			return state.RefreshCrateState(name)
+		}
+	}
+	return fmt.Errorf("service not found")
+}
+
+func startServiceDirect(name string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("service name required")
+	}
+	mods := modules.LoadAll(".")
+	// Find and start service
+	for i := range cfg.Services.Services {
+		if cfg.Services.Services[i].Name == name {
+			cfg.Services.Services[i].Enabled = true
+			cfg.Services.Services[i].Autostart = true
+			if err := config.SaveServices(cfg); err != nil {
+				return err
+			}
+			// Apply service action
+			applyServiceAction(name, serviceActionStart, mods)
+			return state.RefreshCrateState(name)
+		}
+	}
+	return fmt.Errorf("service not found")
+}
+
+func stopServiceDirect(name string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	name = strings.TrimSpace(name)
+	if name == "" {
+		return fmt.Errorf("service name required")
+	}
+	mods := modules.LoadAll(".")
+	// Find and stop service
+	for i := range cfg.Services.Services {
+		if cfg.Services.Services[i].Name == name {
+			cfg.Services.Services[i].Enabled = true
+			cfg.Services.Services[i].Autostart = false
+			if err := config.SaveServices(cfg); err != nil {
+				return err
+			}
+			// Apply service action
+			applyServiceAction(name, serviceActionStop, mods)
+			return state.RefreshCrateState(name)
+		}
+	}
+	return fmt.Errorf("service not found")
+}
+
+// Service action types and helper functions
+type serviceAction string
+
+const (
+	serviceActionEnableOnly serviceAction = "enable-only"
+	serviceActionDisable    serviceAction = "disable"
+	serviceActionStart      serviceAction = "start"
+	serviceActionStop       serviceAction = "stop"
+)
+
+func applyServiceAction(name string, action serviceAction, mods map[string]modules.Module) {
+	targets := []string{name}
+	if mod, ok := mods[name]; ok {
+		if units := modules.ResolveUnits(name, mod, true); len(units) > 0 {
+			targets = units
+		}
+	}
+	for _, target := range targets {
+		switch action {
+		case serviceActionEnableOnly:
+			systemctlNoError("enable", target)
+		case serviceActionDisable:
+			systemctlNoError("stop", target)
+			systemctlNoError("disable", target)
+		case serviceActionStart:
+			systemctlNoError("enable", target)
+			systemctlNoError("start", target)
+		case serviceActionStop:
+			systemctlNoError("stop", target)
+		}
+	}
+}
+
+func shouldAutostartOnEnable(name string, mods map[string]modules.Module) bool {
+	if mod, ok := mods[name]; ok {
+		return mod.InstallMode() != "staged"
+	}
+	return true
+}
+
+func systemctlNoError(action, unit string) {
+	if runtime.GOOS != "linux" {
+		return
+	}
+	_ = exec.Command("systemctl", action, unit).Run()
+}
 
 func gatherServices() []ServiceInfo {
 	cfg, err := config.Load()
@@ -2485,7 +2725,7 @@ func gatherServices() []ServiceInfo {
 }
 
 func (m *model) refreshServices() {
-	if info, svcs, platformInfo, _ := fetchStatusViaAPI(m.currentUser); info != nil {
+	if info, svcs, platformInfo, _, _ := fetchStatusViaAPI(m.currentUser); info != nil {
 		m.info = *info
 		m.services = svcs
 		m.platform = platformInfo

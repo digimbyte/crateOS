@@ -17,22 +17,37 @@ import (
 	"github.com/crateos/crateos/internal/config"
 	"github.com/crateos/crateos/internal/platform"
 	"github.com/crateos/crateos/internal/sysinfo"
+	"github.com/crateos/crateos/internal/users"
+	"github.com/crateos/crateos/internal/virtualization"
 )
 
 func reconcilePlatform(cfg *config.Config) []Action {
 	var actions []Action
 	accessActions, accessState := reconcileAccess(cfg.CrateOS)
+	userActions, userState := reconcileUsers(cfg)
+	virtDesktopState := virtualization.ReconcileVirtualDesktop(cfg)
 	reverseProxyActions, reverseProxyState := reconcileReverseProxy(cfg.ReverseProxy)
 	firewallActions, firewallState := reconcileFirewall(cfg.Firewall)
 	networkActions, networkState := reconcileNetwork(cfg.Network)
 	storageActions, storageState := reconcileStorage()
 	actions = append(actions, accessActions...)
+	actions = append(actions, userActions...)
 	actions = append(actions, reverseProxyActions...)
 	actions = append(actions, firewallActions...)
 	actions = append(actions, networkActions...)
 	actions = append(actions, storageActions...)
+	// Virtual desktop state is informational, no direct actions
+	if len(virtDesktopState.Issues) > 0 {
+		for _, issue := range virtDesktopState.Issues {
+			actions = append(actions, Action{
+				Description: fmt.Sprintf("virtual desktop: %s", issue),
+				Component:   "virtualization",
+				Target:      "sessions",
+			})
+		}
+	}
 	writePlatformState(PlatformState{
-		Adapters: []PlatformAdapterState{accessState, reverseProxyState, firewallState, networkState, storageState},
+		Adapters: []PlatformAdapterState{accessState, userState, reverseProxyState, firewallState, networkState, storageState},
 	})
 	return actions
 }
@@ -1435,4 +1450,57 @@ func maxInt(v int, fallback int) int {
 		return v
 	}
 	return fallback
+}
+
+func reconcileUsers(cfg *config.Config) ([]Action, PlatformAdapterState) {
+	var actions []Action
+	var issues []string
+	adapter := platformAdapterState("users", "User Provisioning", true)
+
+	if runtime.GOOS != "linux" {
+		adapter.Summary = "user provisioning not supported on non-Linux platforms"
+		return actions, finalizePlatformAdapterState(adapter, issues)
+	}
+
+	// Perform user provisioning
+	reconciled, provState, err := users.ProvisionUsers(cfg)
+	if err != nil {
+		issues = append(issues, fmt.Sprintf("user provisioning failed: %v", err))
+		adapter.Validation = "failed"
+		adapter.ValidationErr = err.Error()
+	} else {
+		adapter.Validation = "ok"
+	}
+
+	// Collect issues from provisioning
+	for _, issue := range provState.Issues {
+		issues = append(issues, issue)
+	}
+
+	// Write provisioning state
+	renderedPath := platform.CratePath("state", "rendered", "user-provisioning.json")
+	adapter.RenderedPaths = append(adapter.RenderedPaths, renderedPath)
+
+	if data, marshalErr := json.MarshalIndent(provState, "", "  "); marshalErr == nil {
+		if action, writeErr := writeManagedArtifact(
+			"users/provisioning.json",
+			renderedPath,
+			string(data)+"\n",
+			"users",
+			"rendered user provisioning state",
+		); writeErr != nil {
+			issues = append(issues, writeErr.Error())
+		} else if action != nil {
+			actions = append(actions, *action)
+		}
+	} else {
+		issues = append(issues, fmt.Sprintf("failed to marshal provisioning state: %v", marshalErr))
+	}
+
+	adapter.Summary = provState.Summary
+	if len(reconciled) > 0 {
+		adapter.Apply = "ok"
+	}
+
+	return actions, finalizePlatformAdapterState(adapter, issues)
 }

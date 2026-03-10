@@ -1,0 +1,104 @@
+# CrateOS Raspberry Pi Zero 2 W Minimal package policy
+# Platform: Raspberry Pi OS Lite 64-bit (Bookworm)
+#
+# RPi Zero 2 W platform constraints:
+# - Single-core ARM64 CPU equivalent (1GHz)
+# - 512MB RAM (very tight!)
+# - MicroSD card I/O (slow write speed)
+# - GPIO/SPI/I2C hardware interfaces
+# - No WiFi/Bluetooth by default (only USB)
+# - Passive cooling (no fans), thermal throttling risk
+# - Minimal install (no GUI)
+#
+# Strategy: Only essential packages, no development tools
+
+required:
+  # --- Core platform (absolute minimum) ---
+  - openssh-server
+  - nftables
+  - openssl
+  - ca-certificates
+
+  # --- Base utilities (critical only) ---
+  - curl
+  - wget
+  - jq
+  - git
+  - rsync
+  - lsof
+
+  # --- Time/updates/maintenance ---
+  - chrony
+  - unattended-upgrades
+  - logrotate
+
+  # --- Minimal diagnostics ---
+  # btop only - other tools excluded to save RAM
+  - btop
+
+  # --- Security & access ---
+  - fail2ban
+  - wireguard
+
+  # --- Note: NO build-essential, python3-pip, powershell ---
+  # These are too heavy for 512MB RAM
+
+optional:
+  # --- Lightweight web proxy (opt-in) ---
+  - nginx                          # Minimal HTTP server
+
+excluded:
+  # Absolutely remove on Zero 2 to save space/RAM
+  - network-manager                # Too heavy, use dhcpcd
+  - build-essential                # Compiler toolchain too large (500MB+)
+  - pkg-config
+  - python3-venv
+  - python3-pip
+  - powershell                     # Way too heavy for 512MB
+  - yq                             # YAML tools unnecessary
+  - dos2unix
+  
+  # x86-specific or resource-intensive
+  - docker.io                      # Impossible on 512MB RAM
+  - docker-compose-plugin
+  - postgres                       # Database too heavy
+  - msmtp                          # Email not a priority
+  - cloudflared                    # Tunnel client too heavy
+  - screen                         # Multiplexer not needed
+  - tmux                           # Multiplexer not needed
+  
+  # Heavy diagnostics
+  - ncdu                           # Disk usage not critical
+  - ethtool                        # Network tools not needed
+  - dnsutils                       # DNS tools redundant
+  - iperf3                         # Network benchmarking not needed
+  - smartmontools                  # x86 SMART monitoring
+  - nvme-cli                       # No NVMe
+  - fancontrol                     # No fans
+  - hddtemp                        # Temp monitoring not critical
+  - pciutils                       # GPIO, not PCI
+  - usbutils                       # USB rarely diagnosed
+  - lm-sensors                     # Thermal monitoring for x86
+  - lightdm                        # GUI impossible
+  - cockpit                        # Web UI too heavy
+  - qemu-system-x86               # Virtualization impossible
+  - ffmpeg                         # Video too CPU/RAM intensive
+  - imagemagick                    # Image processing too heavy
+
+recommendations:
+  # Only if absolutely needed and with caution
+  - python3                        # Keep core, but no pip
+  
+  # For GPIO projects (use lightweight libs)
+  - python3-gpiozero              # Python GPIO library (relatively light)
+  # OR
+  - wiringpi                       # C-based GPIO (lighter)
+
+critical_notes:
+  - Zero 2 W is severely constrained by 512MB RAM
+  - Swap to microSD is essential (configured in seed defaults)
+  - Run single services only, not service clusters
+  - Monitor /dev/shm and swap usage closely
+  - Package installation takes 5-10 minutes due to swap I/O
+  - Heavy operations (e.g., git clone large repos) will thrash disk
+  - Recommend: SSH + lightweight agent + 1 application service maximum

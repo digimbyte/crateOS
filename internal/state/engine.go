@@ -17,6 +17,7 @@ import (
 	"github.com/crateos/crateos/internal/config"
 	"github.com/crateos/crateos/internal/modules"
 	"github.com/crateos/crateos/internal/platform"
+	"github.com/crateos/crateos/internal/users"
 )
 
 // Action represents a single remediation step.
@@ -1008,6 +1009,20 @@ func reconcile(cfg *config.Config, actual *ActualState, mods map[string]modules.
 			}
 		}
 		actions = append(actions, activateHostedManagedWorkloads(cfg, actual, mods)...)
+	}
+
+	// ── User provisioning ──
+	if runtime.GOOS == "linux" {
+		_, _, err := users.ProvisionUsers(cfg)
+		if err != nil {
+			log.Printf("warning: user provisioning failed: %v", err)
+		} else {
+			actions = append(actions, Action{
+				Description: "provisioned CrateOS users to system accounts",
+				Component:   "users",
+				Target:      "system",
+			})
+		}
 	}
 
 	// ── Platform adapters ──

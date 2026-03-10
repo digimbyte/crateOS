@@ -133,7 +133,7 @@ func renderMenuFocusPanel(m model) string {
 		selectorStat("plane", m.controlPlaneMode()),
 	))
 	posture.WriteString("\n")
-	if report, ok := readReadinessReport(); ok {
+	if report, readinessOK := readReadinessReport(); readinessOK {
 		posture.WriteString(renderBadgeRow(
 			selectorStat("ready", strings.TrimSpace(report.Status)),
 		))
@@ -151,7 +151,7 @@ func renderMenuFocusPanel(m model) string {
 	posture.WriteString("\n")
 	b.WriteString(renderSummaryCard("CONTROL POSTURE", posture.String()))
 	var attention strings.Builder
-	if report, ok := readReadinessReport(); ok && strings.TrimSpace(report.Status) == "degraded" {
+	if report, readinessOK := readReadinessReport(); readinessOK && strings.TrimSpace(report.Status) == "degraded" {
 		attention.WriteString(danger.Render("readiness:degraded"))
 		attention.WriteString("\n")
 		if len(report.Failures) > 0 {
