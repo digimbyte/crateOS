@@ -55,7 +55,7 @@ When `ProvisionUsers()` is called:
 
 ### Shell Assignment
 
-All CrateOS users get `/usr/local/bin/crateos-shell-wrapper` as their login shell. This wrapper:
+All CrateOS users get `/usr/local/bin/crateos-login-shell` as their login shell. This wrapper:
 - Drops users into the CrateOS console (TUI)
 - Prevents direct shell access unless break-glass is enabled
 - Can be overridden with custom shells via config
@@ -288,7 +288,7 @@ This produces a `PlatformAdapterState` with:
       "name": "alice",
       "role": "admin",
       "home": "/home/alice",
-      "shell": "/usr/local/bin/crateos-shell-wrapper",
+      "shell": "/usr/local/bin/crateos-login-shell",
       "permissions": ["*"]
     }
   ],
@@ -298,7 +298,7 @@ This produces a `PlatformAdapterState` with:
       "uid": 1000,
       "gid": 1000,
       "home": "/home/alice",
-      "shell": "/usr/local/bin/crateos-shell-wrapper"
+      "shell": "/usr/local/bin/crateos-login-shell"
     }
   ],
   "reconciled": [

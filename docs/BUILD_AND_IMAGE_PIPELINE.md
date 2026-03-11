@@ -25,8 +25,10 @@ Contents:
 - Renders shared seed identity defaults from `images/common/seed-defaults.env`
 - Renders required package list from `packaging/config/packages.yaml`
 - Builds `seed-<VERSION>.iso` with cloud-init:
-  - installer identity user from `images/common/seed-defaults.env` promoted into the initial CrateOS admin role (password expired during provisioning)
+  - installer identity user from `images/common/seed-defaults.env` promoted into the initial CrateOS admin role
   - installs required base packages plus CrateOS debs from `/var/tmp/crateos-debs`
+  - sets the seeded operator shell to `/usr/local/bin/crateos-login-shell`
+  - stamps a `getty@tty1` override so local console lands in `crateos console`
   - runs shared bootstrap-artifact verification before runtime validation
   - runs `/usr/local/bin/verify-mvp-install`
 - Embeds debs into qcow2 via guestfish inspection mode (`-i`) instead of assuming a fixed root partition path
@@ -64,6 +66,8 @@ Contents:
   - `/srv/crateos/state/installed.json` present
   - seeded configs under `/srv/crateos/config/`
   - SSH forced into `/usr/local/bin/crateos console`
+  - `tty1` autologin targeting the seeded operator
+  - seeded operator shell set to `/usr/local/bin/crateos-login-shell`
 - Readiness freshness contract:
   - `crateos-policy.timer` refreshes `readiness-report.json` every 2 minutes after boot
   - installed-host verification treats `readiness-report.json` as stale after 3 minutes

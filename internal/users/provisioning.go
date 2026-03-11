@@ -356,7 +356,7 @@ func defaultUserShell(role string) string {
 	role = strings.ToLower(strings.TrimSpace(role))
 	// All CrateOS users use the crateos console as their shell
 	// unless they have break-glass access
-	return "/usr/local/bin/crateos-shell-wrapper"
+	return "/usr/local/bin/crateos-login-shell"
 }
 
 // saveProvisioningState persists the provisioning state.

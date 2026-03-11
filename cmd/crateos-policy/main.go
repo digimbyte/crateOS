@@ -153,6 +153,9 @@ func ensureSSHDropIn(_ *config.Config) error {
 }
 
 func ensureShellWrapperPermissions(_ *config.Config) error {
+	if err := os.Chmod("/usr/local/bin/crateos-login-shell", 0755); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("chmod login shell: %w", err)
+	}
 	if err := os.Chmod("/usr/local/bin/crateos-shell-wrapper", 0755); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("chmod shell wrapper: %w", err)
 	}
@@ -222,7 +225,7 @@ func ensureTTYOverride(cfg *config.Config) error {
 		return nil
 	}
 
-	override := fmt.Sprintf("[Service]\nExecStart=\nExecStart=-/sbin/agetty --autologin %s --noclear %%I $TERM\nType=idle\n", username)
+	override := fmt.Sprintf("[Service]\nExecStart=\nExecStart=-/sbin/agetty --noissue --autologin %s %%I $TERM\nType=idle\n", username)
 	path := "/etc/systemd/system/getty@tty1.service.d/override.conf"
 	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
 		return fmt.Errorf("ensure tty1 override dir: %w", err)

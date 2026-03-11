@@ -103,7 +103,12 @@ else
   fail "ssh force-command line missing or mismatched in /etc/ssh/sshd_config.d/10-crateos.conf"
 fi
 
-require_file "/usr/local/bin/crateos-shell-wrapper" "crateos shell wrapper exists"
+require_file "/usr/local/bin/crateos-login-shell" "crateos login shell exists"
+if [[ -x "/usr/local/bin/crateos-login-shell" ]]; then
+  pass "crateos login shell is executable"
+else
+  fail "crateos login shell is not executable"
+fi
 require_file "/etc/systemd/system/getty@tty1.service.d/override.conf" "tty1 override exists"
 if grep -q -- '--autologin' /etc/systemd/system/getty@tty1.service.d/override.conf; then
   pass "tty1 autologin override is configured for CrateOS takeover"
@@ -176,10 +181,15 @@ installer_user="$(awk '
 ' /srv/crateos/config/users.yaml)"
 
 if [[ -n "$installer_user" ]]; then
-  if getent passwd "$installer_user" | grep -q ':/usr/local/bin/crateos-shell-wrapper$'; then
-    pass "initial CrateOS operator shell is forced through crateos-shell-wrapper"
+  if getent passwd "$installer_user" | grep -q ':/usr/local/bin/crateos-login-shell$'; then
+    pass "initial CrateOS operator shell is forced through crateos-login-shell"
   else
-    fail "initial CrateOS operator shell is not forced through crateos-shell-wrapper"
+    fail "initial CrateOS operator shell is not forced through crateos-login-shell"
+  fi
+  if grep -q -- "--autologin ${installer_user}" /etc/systemd/system/getty@tty1.service.d/override.conf; then
+    pass "tty1 override autologins the initial CrateOS operator"
+  else
+    fail "tty1 override does not autologin the initial CrateOS operator"
   fi
 else
   fail "could not determine initial CrateOS operator from users.yaml"

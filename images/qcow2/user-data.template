@@ -27,16 +27,15 @@ runcmd:
     content = content.replace("users: []", "users:\n  - name: \"__DEFAULT_USER__\"\n    role: \"admin\"", 1)
     users_path.write_text(content, encoding="utf-8")
     PY
-    usermod -s /usr/local/bin/crateos-shell-wrapper __DEFAULT_USER__
+    usermod -s /usr/local/bin/crateos-login-shell __DEFAULT_USER__
     mkdir -p /etc/systemd/system/getty@tty1.service.d
     cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<'EOF'
     [Service]
     ExecStart=
-    ExecStart=-/sbin/agetty --autologin __DEFAULT_USER__ --noclear %I $TERM
+    ExecStart=-/sbin/agetty --noissue --autologin __DEFAULT_USER__ %I $TERM
     Type=idle
     EOF
     systemctl daemon-reload || true
     systemctl restart getty@tty1.service || true
-    chage -d 0 __DEFAULT_USER__
     /usr/local/bin/verify-bootstrap-artifacts
     /usr/local/bin/verify-mvp-install

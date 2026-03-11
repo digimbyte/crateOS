@@ -37,6 +37,14 @@ __REQUIRED_PACKAGES__
         echo "No CrateOS .deb files found on media — failing install"
         exit 1
       fi
+      if [ ! -f /cdrom/overlay/usr/local/bin/crateos-login-shell ]; then
+        echo "CrateOS login shell overlay missing from media — failing install"
+        exit 1
+      fi
+      if [ ! -f /cdrom/overlay/etc/systemd/system/getty@tty1.service.d/override.conf ]; then
+        echo "CrateOS tty1 override overlay missing from media — failing install"
+        exit 1
+      fi
       install -d /target/var/tmp/crateos-debs
       cp /cdrom/crateos-debs/*.deb /target/var/tmp/crateos-debs/
       sync
@@ -49,24 +57,17 @@ __REQUIRED_PACKAGES__
       content = content.replace("users: []", "users:\n  - name: \"__DEFAULT_USER__\"\n    role: \"admin\"", 1)
       users_path.write_text(content, encoding="utf-8")
       PY
-      curtin in-target -- usermod -s /usr/local/bin/crateos-shell-wrapper __DEFAULT_USER__
-      mkdir -p /target/etc/ssh/sshd_config.d
-      cat > /target/etc/ssh/sshd_config.d/10-crateos.conf <<'EOF'
-      # CrateOS: force SSH sessions into the CrateOS console.
-      # Users land in the TUI instead of a raw shell.
-      # Admin break-glass access is handled via the console's escape hatch.
-      ForceCommand /usr/local/bin/crateos console
-      EOF
-      chmod 0644 /target/etc/ssh/sshd_config.d/10-crateos.conf
-      chmod 0755 /target/usr/local/bin/crateos-shell-wrapper || true
-      mkdir -p /target/etc/systemd/system/getty@tty1.service.d
-      cat > /target/etc/systemd/system/getty@tty1.service.d/override.conf <<'EOF'
-      [Service]
-      ExecStart=
-      ExecStart=-/sbin/agetty --autologin __DEFAULT_USER__ --noclear %I $TERM
-      Type=idle
-      EOF
-      curtin in-target -- chage -d 0 __DEFAULT_USER__
+      install -d /target/usr/local/bin
+      install -d /target/etc/systemd/system/getty@tty1.service.d
+      cp /cdrom/overlay/usr/local/bin/crateos-login-shell /target/usr/local/bin/crateos-login-shell
+      cp /cdrom/overlay/etc/systemd/system/getty@tty1.service.d/override.conf /target/etc/systemd/system/getty@tty1.service.d/override.conf
+      chmod 0755 /target/usr/local/bin/crateos-login-shell
+      curtin in-target -- usermod -s /usr/local/bin/crateos-login-shell __DEFAULT_USER__
+      test -x /target/usr/local/bin/crateos-login-shell
+      test -f /target/etc/systemd/system/getty@tty1.service.d/override.conf
+      curtin in-target -- test -x /usr/local/bin/crateos
+      curtin in-target -- test -x /usr/local/bin/crateos-login-shell
+      curtin in-target -- sh -c "getent passwd __DEFAULT_USER__ | grep ':/usr/local/bin/crateos-login-shell$'"
       rm -rf /target/var/tmp/crateos-debs
       sync
       if ! curtin in-target -- /usr/local/bin/verify-bootstrap-artifacts; then

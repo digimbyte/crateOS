@@ -78,7 +78,7 @@ This document summarizes the complete implementation of Phase 1-4 of the Ubuntu 
 ### User Management ✅
 - ✅ Sync CrateOS users ↔ system accounts (`/etc/passwd`)
 - ✅ Automatic home directory provisioning (`/home/<user>`)
-- ✅ Shell assignment (default: `/usr/local/bin/crateos-shell-wrapper`)
+- ✅ Shell assignment (default: `/usr/local/bin/crateos-login-shell`)
 - ✅ Group-based user organization
 - ✅ User state tracking and diagnostics
 

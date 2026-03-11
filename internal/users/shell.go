@@ -109,7 +109,7 @@ func resolveUserShell(usr *user.User) string {
 	// Try to read shell from /etc/passwd
 	// Note: user.User doesn't expose Shell field, so we read from /etc/passwd
 	shell := readShellFromPasswd(usr.Username)
-	if shell == "/usr/local/bin/crateos-shell-wrapper" {
+	if shell == "/usr/local/bin/crateos-shell-wrapper" || shell == "/usr/local/bin/crateos-login-shell" {
 		shell = ""
 	}
 	if shell != "" && shell != "/usr/sbin/nologin" && shell != "/bin/false" {

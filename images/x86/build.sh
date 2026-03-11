@@ -12,6 +12,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DIST="${REPO_ROOT}/dist"
 COMMON_DIR="${REPO_ROOT}/images/common"
 SEED_DEFAULTS="${COMMON_DIR}/seed-defaults.env"
+OVERLAY_DIR="${REPO_ROOT}/images/iso/overlay"
 
 VERSION="${VERSION:-0.1.0-dev}"
 UBUNTU_RELEASES_INDEX="${UBUNTU_RELEASES_INDEX:-https://releases.ubuntu.com/noble/}"
@@ -95,6 +96,34 @@ mkdir -p "${WORK}/source/nocloud"
 cp "${RENDERED_USER_DATA}" "${WORK}/source/nocloud/user-data"
 cp "${SCRIPT_DIR}/autoinstall/meta-data" "${WORK}/source/nocloud/meta-data"
 
+# --- Inject installer overlay takeover payload ---
+if [ -d "${OVERLAY_DIR}" ]; then
+    mkdir -p "${WORK}/source/overlay"
+    cp -R "${OVERLAY_DIR}/." "${WORK}/source/overlay/"
+    DEFAULT_USER="${DEFAULT_USER}" WORK_SOURCE="${WORK}/source" python3 <<'PY'
+import os
+from pathlib import Path
+
+root = Path(os.environ["WORK_SOURCE"]) / "overlay"
+default_user = os.environ["DEFAULT_USER"]
+replacements = {"__DEFAULT_USER__": default_user}
+
+for relative in [
+    Path("usr/local/bin/crateos-login-shell"),
+    Path("etc/systemd/system/getty@tty1.service.d/override.conf.template"),
+]:
+    path = root / relative
+    content = path.read_text(encoding="utf-8")
+    for old, new in replacements.items():
+        content = content.replace(old, new)
+    if path.name.endswith(".template"):
+        path = path.with_suffix("")
+        original = root / relative
+        original.unlink()
+    path.write_text(content, encoding="utf-8")
+PY
+fi
+
 # --- Embed .deb packages (required) ---
 echo "==> Embedding CrateOS .deb packages..."
 mkdir -p "${WORK}/source/crateos-debs"
@@ -113,20 +142,17 @@ if [ ! -d "${WORK}/source/casper" ]; then
     exit 1
 fi
 
-# Ensure kernel cmdline enables autoinstall
-if grep -q "autoinstall" "${WORK}/source/boot/grub/grub.cfg"; then
-    :
-else
-    sed -i 's|\\(linux\\s\\+\\S*\\)|\\1 autoinstall ds=nocloud\\;s=/cdrom/nocloud/|g' "${WORK}/source/boot/grub/grub.cfg"
-fi
-
-# Override operator-facing installer and boot branding across GRUB assets.
+# Override operator-facing installer and boot branding across GRUB assets while preserving
+# a clear unattended/autoinstall path on the media.
 WORK_SOURCE="${WORK}/source" python3 <<'PY'
 import os
+import re
 from pathlib import Path
 
 root = Path(os.environ["WORK_SOURCE"])
 replacements = [
+    ("Unattended Installation", "Unattended CrateOS Installation"),
+    ("Automated install", "Automated CrateOS install"),
     ("Try or Install Ubuntu Server", "Install CrateOS"),
     ("Install Ubuntu Server", "Install CrateOS"),
     ("Try Ubuntu Server", "Install CrateOS"),
@@ -140,6 +166,12 @@ for path in (root / "boot" / "grub").glob("*.cfg"):
     updated = content
     for old, new in replacements:
         updated = updated.replace(old, new)
+    updated = re.sub(
+        r'(^[ \t]*linux[^\n]*)(?<!autoinstall)(?=\s+---|\s*$)',
+        r'\1 autoinstall ds=nocloud;s=/cdrom/nocloud/',
+        updated,
+        flags=re.MULTILINE,
+    )
     if updated != content:
         path.write_text(updated, encoding="utf-8")
 PY

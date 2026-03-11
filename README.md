@@ -216,10 +216,11 @@ Testing/update lanes:
 systemctl status crateos-agent.service --no-pager
 systemctl status crateos-policy.timer --no-pager
 ```
-Default first-login credential for ISO seed user:
+Default first-install seeded operator identity:
 
 * user: the installer-seeded first operator from `images/common/seed-defaults.env` (default: `crate`)
-* password: `crateos` (expired in the target system during install; change required on first login)
+* password: `crateos`
+* local `tty1` autologins that seeded operator and lands in `crateos console` through `/usr/local/bin/crateos-login-shell`
 
 ### 4) Verify CrateOS root bootstrap
 
@@ -245,12 +246,13 @@ Confirm `/etc/ssh/sshd_config.d/10-crateos.conf` exists and includes:
 * CrateOS framework install is ISO-based and forced by this installer; non-ISO artifacts are test/update lanes.
 * Existing `/srv/crateos/config/*.yaml` is preserved; default configs are only seeded when missing on install.
 * ISO late-commands install embedded CrateOS `.deb` files and run dependency repair (`apt-get -f install`) if needed.
-* ISO autoinstall fails fast if embedded `.deb` payload is missing, if expected CrateOS binaries are not present in target rootfs after package install, or if seeded config files / persistent unit enablement links are missing.
+* ISO autoinstall fails fast if embedded `.deb` payload is missing, if expected CrateOS binaries are not present in target rootfs after package install, or if the seeded operator takeover files (`crateos-login-shell`, `tty1` override, operator shell assignment) are missing.
 * ISO rebuild now replays the source Ubuntu ISO boot metadata and refreshes `md5sum.txt` after media mutation instead of assuming older hard-coded isolinux paths.
 * ISO and qcow2 now share the same installed bootstrap-artifact verification path before runtime validation, reducing lane drift in machine-readiness checks.
 * ISO and qcow2 both derive their required base package list from `packaging/config/packages.yaml` instead of maintaining separate copied package blocks.
 * ISO and qcow2 both derive shared seed identity defaults (hostname, default user, password hash) from `images/common/seed-defaults.env`.
 * The installer identity user is promoted into `/srv/crateos/config/users.yaml` as the initial CrateOS admin rather than relying on a separate hardcoded framework account.
+* Local console takeover is an image contract: `tty1` autologins the seeded operator, that operator uses `/usr/local/bin/crateos-login-shell`, and the login shell `exec`s `crateos console` instead of landing in raw bash.
 * `crateos-policy.timer` now refreshes the canonical readiness report on a 2-minute cadence after boot; installed-host verification treats that report as stale after 3 minutes.
 * Run one-command verification on installed host:
 
@@ -270,6 +272,7 @@ Treat the installable MVP foundation as complete only when all of the following 
 * First boot has `crateos-agent.service` active/enabled, `crateos-agent-watchdog.timer` active/enabled, and `crateos-policy.timer` active/enabled.
 * `/srv/crateos`, `/srv/crateos/config`, `/srv/crateos/state/installed.json`, `/srv/crateos/state/platform-state.json`, `/srv/crateos/state/agent-watchdog.json`, `/srv/crateos/state/readiness-report.json`, `/srv/crateos/state/storage-state.json`, and the seeded default config files exist.
 * SSH lands in `crateos console` via `ForceCommand /usr/local/bin/crateos console`.
+* `tty1` autologins the seeded operator through `getty@tty1` override and that operator shell is `/usr/local/bin/crateos-login-shell`.
 * `/usr/local/bin/verify-mvp-install` passes on the installed host.
 * `/srv/crateos/runtime/agent.sock` exists as a live Unix socket after boot.
 * Platform, storage, and watchdog state artifacts are fresh enough to show the control plane is still updating, not just historically present.

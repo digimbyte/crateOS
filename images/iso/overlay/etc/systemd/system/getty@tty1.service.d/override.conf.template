@@ -1,0 +1,4 @@
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --noissue --autologin __DEFAULT_USER__ %I $TERM
+Type=idle

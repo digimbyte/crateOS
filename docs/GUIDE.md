@@ -166,8 +166,8 @@ CrateOS is **installed as part of the OS install**. The CrateOS ISO installer is
 * Upgrades are handled by new images/releases, not by in-place conversion or rollback
 * ISO install completion now depends on seeded config presence and persistent first-boot unit enablement; post-install verification is executed with `/usr/local/bin/verify-mvp-install`
 * ISO media rebuild preserves the base Ubuntu boot model by replaying source ISO boot metadata and refreshing media checksums after mutation
-* The default seed account password is expired inside the target system during install so first login still forces a password change without relying on out-of-schema autoinstall keys
 * Fresh installs promote the installer-created machine user into the initial CrateOS admin operator; if operator state is missing later, recover locally with `crateos bootstrap <name>`
+* Fresh installs stamp local-console takeover directly into the target rootfs: `tty1` autologins the seeded operator, the seeded operator shell is `/usr/local/bin/crateos-login-shell`, and that login shell `exec`s `crateos console`
 * Agent liveness is supervised by both systemd restart policy and `crateos-agent-watchdog.timer`, which logs and retries recovery if the agent or its socket falls out of service after boot
 * Machine-readiness now expects the live agent socket plus rendered platform/watchdog state artifacts, not just enabled units and seeded files
 * Those runtime state artifacts must also stay fresh enough to prove the control plane is still updating after boot

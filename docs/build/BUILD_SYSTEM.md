@@ -101,14 +101,15 @@ The ISO build injects CrateOS into the Ubuntu installer via:
 ```yaml
 late-commands:
   - Install CrateOS .deb files from media
+  - Stamp crateos-login-shell + tty1 override into /target
   - Run verify-bootstrap-artifacts (from crateos-agent package)
-  - Force password change on first login
 ```
 
 ### Result
 - **Bootable ISO** with forced CrateOS installation
 - All dependencies pre-installed
 - Agent auto-starts on first boot
+- `tty1` autologins the seeded operator into `crateos console`
 - Ready to boot in VM/physical machine
 
 ## Dependencies
