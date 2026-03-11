@@ -43,6 +43,6 @@ func (m model) viewSetup() string {
 	b.WriteString("\n\n")
 	b.WriteString(dim.Render("Press enter to bootstrap the platform."))
 	b.WriteString("\n")
-	b.WriteString(footer.Render("  type username · enter create admin · ctrl+c quit"))
+	b.WriteString(footer.Render("  type username · enter create admin"))
 	return b.String()
 }

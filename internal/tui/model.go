@@ -143,5 +143,4 @@ var menuItems = []string{
 	"Users",
 	"Logs",
 	"Network",
-	"Exit",
 }

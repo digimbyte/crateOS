@@ -34,6 +34,22 @@ __REQUIRED_PACKAGES__
       fi
       cp /cdrom/crateos-debs/*.deb /target/tmp/
       curtin in-target -- dpkg -i /tmp/crateos*.deb || curtin in-target -- apt-get -f install -y
+      python3 - <<'PY'
+      from pathlib import Path
+
+      users_path = Path("/target/srv/crateos/config/users.yaml")
+      content = users_path.read_text(encoding="utf-8")
+      content = content.replace("users: []", "users:\n  - name: \"__DEFAULT_USER__\"\n    role: \"admin\"", 1)
+      users_path.write_text(content, encoding="utf-8")
+      PY
+      curtin in-target -- usermod -s /usr/local/bin/crateos-shell-wrapper __DEFAULT_USER__
+      mkdir -p /target/etc/systemd/system/getty@tty1.service.d
+      cat > /target/etc/systemd/system/getty@tty1.service.d/override.conf <<'EOF'
+      [Service]
+      ExecStart=
+      ExecStart=-/sbin/agetty --autologin __DEFAULT_USER__ --noclear %I $TERM
+      Type=idle
+      EOF
       curtin in-target -- chage -d 0 __DEFAULT_USER__
       rm -f /target/tmp/crateos*.deb
       if ! curtin in-target -- /usr/local/bin/verify-bootstrap-artifacts; then

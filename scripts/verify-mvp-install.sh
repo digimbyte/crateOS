@@ -103,6 +103,88 @@ else
   fail "ssh force-command line missing or mismatched in /etc/ssh/sshd_config.d/10-crateos.conf"
 fi
 
+require_file "/usr/local/bin/crateos-shell-wrapper" "crateos shell wrapper exists"
+require_file "/etc/systemd/system/getty@tty1.service.d/override.conf" "tty1 override exists"
+if grep -q -- '--autologin' /etc/systemd/system/getty@tty1.service.d/override.conf; then
+  pass "tty1 autologin override is configured for CrateOS takeover"
+else
+  fail "tty1 autologin override is missing CrateOS takeover settings"
+fi
+require_file "/etc/os-release" "os-release exists"
+if grep -q '^NAME="CrateOS"$' /etc/os-release; then
+  pass "installed system identity is branded as CrateOS"
+else
+  fail "installed system identity is not branded as CrateOS in /etc/os-release"
+fi
+if grep -q '^PRETTY_NAME="CrateOS (Ubuntu noble derivative)"$' /etc/os-release; then
+  pass "installed system pretty name exposes CrateOS as an Ubuntu-derived framework"
+else
+  fail "installed system pretty name is not branded as the CrateOS Ubuntu-derived framework"
+fi
+if grep -q '^ID_LIKE=ubuntu debian$' /etc/os-release; then
+  pass "installed system identifies as an Ubuntu-derived framework"
+else
+  fail "installed system does not expose Ubuntu-derived identity in /etc/os-release"
+fi
+require_file "/etc/issue" "local login banner exists"
+if grep -q 'CrateOS - Ubuntu-derived framework appliance' /etc/issue; then
+  pass "local login banner presents CrateOS as the Ubuntu-derived framework appliance"
+else
+  fail "local login banner does not present the CrateOS framework appliance identity"
+fi
+require_file "/etc/issue.net" "remote login banner exists"
+if grep -q 'CrateOS - Ubuntu-derived framework appliance' /etc/issue.net; then
+  pass "remote login banner presents CrateOS as the Ubuntu-derived framework appliance"
+else
+  fail "remote login banner does not present the CrateOS framework appliance identity"
+fi
+require_file "/etc/default/motd-news" "motd-news config exists"
+if grep -q '^ENABLED=0$' /etc/default/motd-news; then
+  pass "motd-news is disabled"
+else
+  fail "motd-news is not disabled"
+fi
+for disabled_motd in \
+  /etc/update-motd.d/50-landscape-sysinfo \
+  /etc/update-motd.d/50-motd-news \
+  /etc/update-motd.d/80-livepatch \
+  /etc/update-motd.d/88-esm-announce \
+  /etc/update-motd.d/91-contract-ua-esm-status \
+  /etc/update-motd.d/91-release-upgrade \
+  /etc/update-motd.d/92-unattended-upgrades; do
+  if [[ -e "$disabled_motd" ]]; then
+    if [[ -x "$disabled_motd" ]]; then
+      fail "stock Ubuntu MOTD surface still executable: $disabled_motd"
+    else
+      pass "stock Ubuntu MOTD surface disabled: $disabled_motd"
+    fi
+  fi
+done
+
+installer_user="$(awk '
+  /^[[:space:]]*-[[:space:]]+name:[[:space:]]*/ {
+    line=$0
+    sub(/^[[:space:]]*-[[:space:]]+name:[[:space:]]*/, "", line)
+    gsub(/"/, "", line)
+    gsub(/[[:space:]]+#.*$/, "", line)
+    gsub(/^[[:space:]]+|[[:space:]]+$/, "", line)
+    if (line != "") {
+      print line
+      exit
+    }
+  }
+' /srv/crateos/config/users.yaml)"
+
+if [[ -n "$installer_user" ]]; then
+  if getent passwd "$installer_user" | grep -q ':/usr/local/bin/crateos-shell-wrapper$'; then
+    pass "initial CrateOS operator shell is forced through crateos-shell-wrapper"
+  else
+    fail "initial CrateOS operator shell is not forced through crateos-shell-wrapper"
+  fi
+else
+  fail "could not determine initial CrateOS operator from users.yaml"
+fi
+
 if grep -Eq '^[[:space:]]*-[[:space:]]+name:[[:space:]]*"?[^"#]+' /srv/crateos/config/users.yaml; then
   pass "at least one configured operator exists"
 else

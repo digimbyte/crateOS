@@ -40,10 +40,9 @@ roles:
       - "shell.breakglass"
 
 # System users and their role assignments
-users:
-  - name: "crate"
-    role: "admin"
-    # This is the default user created by the installer.
+users: []
+# The installer or first-boot provisioning flow must assign the machine's
+# initial operator identity as the first CrateOS admin.
 
 # Permission nodes reference:
 #   sys.view             - view system dashboard

@@ -26,8 +26,6 @@ func menuSelectionSummary(cursor int) string {
 		return "Browse crate journals and exported logs from one terminal surface."
 	case "Network":
 		return "Inspect interfaces and network-facing platform state."
-	case "Exit":
-		return "Leave the CrateOS control panel."
 	default:
 		return ""
 	}
@@ -47,8 +45,6 @@ func menuRailGlyph(item string) string {
 		return "◬"
 	case "Network":
 		return "◉"
-	case "Exit":
-		return "×"
 	default:
 		return "•"
 	}
@@ -68,8 +64,6 @@ func menuSelectionAction(cursor int) string {
 		return "route: source and preview"
 	case "Network":
 		return "route: iface and posture"
-	case "Exit":
-		return "route: terminate session"
 	default:
 		return ""
 	}
@@ -104,8 +98,6 @@ func menuSelectorLabel(m model, cursor int) string {
 		return renderBadgeRow("LOG", selectorStat("src", len(m.services)))
 	case "Network":
 		return renderBadgeRow("NET", selectorStat("if", len(m.interfaces)))
-	case "Exit":
-		return "EXIT CONTROL PANEL"
 	default:
 		return strings.ToUpper(menuItemTitle(cursor))
 	}
@@ -125,8 +117,6 @@ func menuSelectionHint(cursor int) string {
 		return "Press Enter to inspect journals, crate logs, and source previews."
 	case "Network":
 		return "Press Enter to inspect interfaces and network-related state."
-	case "Exit":
-		return "Press Enter or Q to exit."
 	default:
 		return ""
 	}

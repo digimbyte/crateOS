@@ -119,8 +119,14 @@ func reconcileUserAccounts(cfg *config.Config, desired []UserProvisioningRecord,
 				record := ReconciliationRecord{
 					User:      d.Name,
 					Action:    "update",
-					Status:    "skipped", // non-destructive for now
 					Timestamp: now,
+				}
+				if err := updateUser(d, a); err != nil {
+					record.Status = "failed"
+					record.Error = err.Error()
+				} else {
+					record.Status = "success"
+					_ = bootstrapUserHome(d)
 				}
 				records = append(records, record)
 			} else {
@@ -196,6 +202,25 @@ func createUser(desired UserProvisioningRecord) error {
 		return fmt.Errorf("useradd failed: %w", err)
 	}
 
+	return nil
+}
+
+func updateUser(desired UserProvisioningRecord, actual SystemUserRecord) error {
+	args := []string{}
+	if desired.Home != "" && desired.Home != actual.Home {
+		args = append(args, "-d", desired.Home, "-m")
+	}
+	if desired.Shell != "" && desired.Shell != actual.Shell {
+		args = append(args, "-s", desired.Shell)
+	}
+	if len(args) == 0 {
+		return nil
+	}
+	args = append(args, desired.Name)
+	cmd := exec.Command("usermod", args...)
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("usermod failed: %w", err)
+	}
 	return nil
 }
 

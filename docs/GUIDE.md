@@ -1,6 +1,6 @@
 # CrateOS
 
-CrateOS is a curated, appliance-style server experience built on **Ubuntu Server LTS**. It presents a **single control surface** (a retro “Pitboy/DOS choose‑your‑adventure” TUI and optional web panel) and a **single canonical filesystem root** for configuration, services, logs, and state.
+CrateOS is a curated, appliance-style server experience built on **Ubuntu Server LTS**. It presents a **single enforced control surface** (a retro “Pitboy/DOS choose‑your‑adventure” CrateOS console and optional web panel) and a **single canonical filesystem root** for configuration, services, logs, and state.
 
 **Goal:** provide a robust “it just works” server platform with predictable defaults, self-healing policies, and a clean UX—while still allowing advanced users to “pop the hood” deliberately.
 
@@ -9,7 +9,7 @@ CrateOS is a curated, appliance-style server experience built on **Ubuntu Server
 ## Design principles
 
 * **One root directory** users care about (Minecraft modpack vibe).
-* **One supported control plane** (TUI + API). No memorizing thousands of CLI flags.
+* **One supported control plane** (CrateOS console + API). No memorizing thousands of CLI flags.
 * **Declarative configs** live under the Crate root; the OS is treated as an implementation detail.
 * **Idempotent apply**: changes are applied via a controller/agent and can be re-applied safely.
 * **Guardrails, not a prison**: normal access is curated; admin escape hatches exist by intent.
@@ -74,8 +74,9 @@ CrateOS is a curated, appliance-style server experience built on **Ubuntu Server
 
 ### SSH and interactive access
 
-* Default SSH entry lands in the **Crate Console** (TUI) rather than a raw shell.
-* Raw shell access is treated as **break-glass** (explicit and permission-gated).
+* Default SSH entry lands in the **Crate Console** rather than a raw shell.
+* Local operator login should land in the same CrateOS-owned control surface rather than a stock Ubuntu shell session.
+* Raw shell access is treated as **break-glass** and is only for authenticated admin-authorized use.
 * Any local GUI or future virtual desktop surface should land inside a **CrateOS-owned session/workspace**, not a normal distro desktop.
 * The console provides:
 
@@ -166,7 +167,7 @@ CrateOS is **installed as part of the OS install**. The CrateOS ISO installer is
 * ISO install completion now depends on seeded config presence and persistent first-boot unit enablement; post-install verification is executed with `/usr/local/bin/verify-mvp-install`
 * ISO media rebuild preserves the base Ubuntu boot model by replaying source ISO boot metadata and refreshing media checksums after mutation
 * The default seed account password is expired inside the target system during install so first login still forces a password change without relying on out-of-schema autoinstall keys
-* Fresh installs seed an initial admin operator (`crate` by default); if operator state is missing later, recover locally with `crateos bootstrap <name>`
+* Fresh installs promote the installer-created machine user into the initial CrateOS admin operator; if operator state is missing later, recover locally with `crateos bootstrap <name>`
 * Agent liveness is supervised by both systemd restart policy and `crateos-agent-watchdog.timer`, which logs and retries recovery if the agent or its socket falls out of service after boot
 * Machine-readiness now expects the live agent socket plus rendered platform/watchdog state artifacts, not just enabled units and seeded files
 * Those runtime state artifacts must also stay fresh enough to prove the control plane is still updating after boot
@@ -277,7 +278,7 @@ CrateOS splits packages into **required** (always installed at OS install time) 
 
 ### Components
 
-* **crateos**: interactive TUI + CLI (user-facing)
+* **crateos**: primary operator interface and control surface
 * **crateos-agent**: local daemon (root) that applies desired state idempotently
 * **crateos-policy**: periodic/boot-time drift detection and repair
 * **optional web panel**: talks to agent via local socket/API

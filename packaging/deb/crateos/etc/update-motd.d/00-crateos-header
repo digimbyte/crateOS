@@ -1,0 +1,3 @@
+#!/bin/sh
+printf 'CrateOS\n'
+printf 'Ubuntu-derived framework appliance\n'

@@ -1,0 +1,10 @@
+NAME="CrateOS"
+PRETTY_NAME="CrateOS (Ubuntu noble derivative)"
+ID=crateos
+ID_LIKE=ubuntu debian
+VERSION="0.1.0+noble1"
+VERSION_ID="0.1.0"
+VERSION_CODENAME=noble
+HOME_URL="https://crateos.local"
+SUPPORT_URL="https://crateos.local/support"
+BUG_REPORT_URL="https://crateos.local/issues"

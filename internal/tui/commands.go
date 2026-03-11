@@ -76,7 +76,7 @@ func (m model) executeSingleCommand(raw string) (tea.Model, tea.Cmd) {
 	cmd := strings.ToLower(args[0])
 	if m.currentView == viewSetup {
 		switch cmd {
-		case "help", "?", "bootstrap", "quit", "exit":
+		case "help", "?", "bootstrap":
 		default:
 			m.setCommandWarn("bootstrap required before control-plane commands")
 			return m, nil
@@ -172,8 +172,8 @@ func (m model) executeSingleCommand(raw string) (tea.Model, tea.Cmd) {
 		m.enterMenuView()
 		m.setCommandOK("route: menu")
 	case "quit", "exit":
-		m.quitting = true
-		return m, tea.Quit
+		m.setCommandWarn("session exit is disabled; CrateOS is the active interface")
+		return m, nil
 	default:
 		if action := normalizeServiceAction(mod); action != "" {
 			target := cmd

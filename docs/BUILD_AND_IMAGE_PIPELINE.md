@@ -25,7 +25,7 @@ Contents:
 - Renders shared seed identity defaults from `images/common/seed-defaults.env`
 - Renders required package list from `packaging/config/packages.yaml`
 - Builds `seed-<VERSION>.iso` with cloud-init:
-  - default user `crate` (password expired during provisioning)
+  - installer identity user from `images/common/seed-defaults.env` promoted into the initial CrateOS admin role (password expired during provisioning)
   - installs required base packages plus CrateOS debs from `/var/tmp/crateos-debs`
   - runs shared bootstrap-artifact verification before runtime validation
   - runs `/usr/local/bin/verify-mvp-install`

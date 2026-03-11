@@ -4,7 +4,7 @@ set -euo pipefail
 # CrateOS qcow2 VM image builder
 # Requires: qemu-utils, cloud-image-utils (or cloud-localds)
 #
-# Strategy: start from Ubuntu cloud image, inject cloud-init to install CrateOS debs.
+# Strategy: start from the Ubuntu noble cloud baseline, then inject CrateOS bootstrap and identity.
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -20,7 +20,7 @@ CLOUD_IMG_NAME="$(basename "$CLOUD_IMG_URL")"
 echo "==> CrateOS qcow2 builder"
 echo "    Version: ${VERSION}"
 
-for tool in wget qemu-img cloud-localds guestfish awk; do
+for tool in wget qemu-img cloud-localds guestfish python3; do
     if ! command -v "${tool}" >/dev/null 2>&1; then
         echo "ERROR: required tool not found: ${tool}"
         exit 1
@@ -43,7 +43,7 @@ fi
 # --- Download cloud image if not cached ---
 mkdir -p "${DIST}/cache"
 if [ ! -f "${DIST}/cache/${CLOUD_IMG_NAME}" ]; then
-    echo "==> Downloading Ubuntu cloud image..."
+    echo "==> Downloading noble cloud baseline..."
     wget -q --show-progress -O "${DIST}/cache/${CLOUD_IMG_NAME}" "${CLOUD_IMG_URL}"
 fi
 
@@ -64,20 +64,28 @@ mkdir -p "${SEED_DIR}"
 USER_DATA="${SEED_DIR}/user-data"
 META_DATA="${SEED_DIR}/meta-data"
 REQUIRED_PACKAGES="$(bash "${COMMON_DIR}/render-required-packages.sh" "  ")"
-awk \
-    -v packages="${REQUIRED_PACKAGES}" \
-    -v hostname="${HOSTNAME}" \
-    -v default_user="${DEFAULT_USER}" \
-    -v default_password="${DEFAULT_PASSWORD}" \
-    -v password_hash="${PASSWORD_HASH}" \
-    '
-    $0 == "__REQUIRED_PACKAGES__" { print packages; next }
-    { gsub(/__HOSTNAME__/, hostname) }
-    { gsub(/__DEFAULT_USER__/, default_user) }
-    { gsub(/__DEFAULT_PASSWORD__/, default_password) }
-    { gsub(/__PASSWORD_HASH__/, password_hash) }
-    { print }
-}' "${SCRIPT_DIR}/user-data.template" > "${USER_DATA}"
+REQUIRED_PACKAGES="${REQUIRED_PACKAGES}" \
+HOSTNAME="${HOSTNAME}" \
+DEFAULT_USER="${DEFAULT_USER}" \
+DEFAULT_PASSWORD="${DEFAULT_PASSWORD}" \
+PASSWORD_HASH="${PASSWORD_HASH}" \
+USER_DATA_TEMPLATE="${SCRIPT_DIR}/user-data.template" \
+USER_DATA_OUTPUT="${USER_DATA}" \
+python3 <<'PY'
+import os
+from pathlib import Path
+
+template_path = Path(os.environ["USER_DATA_TEMPLATE"])
+output_path = Path(os.environ["USER_DATA_OUTPUT"])
+
+content = template_path.read_text(encoding="utf-8")
+content = content.replace("__REQUIRED_PACKAGES__", os.environ["REQUIRED_PACKAGES"])
+content = content.replace("__HOSTNAME__", os.environ["HOSTNAME"])
+content = content.replace("__DEFAULT_USER__", os.environ["DEFAULT_USER"])
+content = content.replace("__DEFAULT_PASSWORD__", os.environ["DEFAULT_PASSWORD"])
+content = content.replace("__PASSWORD_HASH__", os.environ["PASSWORD_HASH"])
+output_path.write_text(content, encoding="utf-8")
+PY
 
 cat > "${META_DATA}" <<EOF
 instance-id: crateos-${VERSION}

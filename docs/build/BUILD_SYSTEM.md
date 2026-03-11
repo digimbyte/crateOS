@@ -81,7 +81,7 @@ make iso      # Create ISO (2-5 min)
 
 ### Base Image
 - **Ubuntu 24.04 LTS** (Noble Numbat) - live server edition
-- Downloaded from `https://releases.ubuntu.com/noble/ubuntu-24.04.2-live-server-amd64.iso`
+- Resolved from `https://releases.ubuntu.com/noble/` to the latest `ubuntu-24.04.x-live-server-amd64.iso`
 - Cached in `dist/cache/` for subsequent builds
 
 ### Patch Application

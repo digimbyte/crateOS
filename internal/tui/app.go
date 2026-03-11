@@ -119,8 +119,8 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 
 	case tea.KeyMsg:
 		if msg.String() == "ctrl+c" {
-			m.quitting = true
-			return m, tea.Quit
+			m.setCommandWarn("interrupt ignored; use authenticated break-glass access for shell entry")
+			return m, nil
 		}
 		if m.commandLaneEnabled() {
 			if m.commandMode {

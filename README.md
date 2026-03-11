@@ -2,43 +2,65 @@
 
 <img src="assets/CrateOS.png" alt="CrateOS" width="360" />
 
-A curated, appliance-style server platform built on **Ubuntu Server LTS**.
+CrateOS is a curated, modular **Ubuntu Server LTS control plane** built to feel more like an **Ubuntu cPanel** than a traditional Linux box.
 
-CrateOS replaces shell-first administration with a **Pitboy/DOS choose-your-adventure console** (SSH/TUI) and an optional web panel. Everything users care about lives under a single canonical root: **`/srv/crateos`**.
+Its purpose is simple: **remove the nerd from Linux** for day-to-day server management without stripping power away from trusted admins. CrateOS replaces scattered shell-first workflows with a guided control surface, a canonical filesystem model, and predictable operational paths for the things people actually want to manage.
 
-> **Thesis:** Linux is powerful but scattered. CrateOS turns it into a cohesive “vehicle as a service”: one control plane, one directory model, and predictable defaults.
+That means no forcing operators to remember random CLI incantations, no routine bash-prompt babysitting, less permission/path trivia, and less damage from common operator mistakes like bad uploads, line-ending problems, or config drift spread across the host.
+
+At the same time, CrateOS is **not** trying to imprison the machine from authorized users. If an admin has `sudo`, that access is intentional. CrateOS provides the sane default path, the clean management path, and the modular path—not fake protection from the people who are already trusted to own the box.
+
+> **Thesis:** Ubuntu is a strong base, but stock Linux administration is too fragmented, too manual, and too easy to derail with trivia. CrateOS turns it into a cohesive control plane with one root, one management model, and one supported operator experience.
 
 ---
 
 ## What CrateOS is
 
-* **A platform layer** on top of Ubuntu Server LTS (not a distro fork).
-* **A control plane** that owns the supported workflows:
+* **A platform layer** on top of Ubuntu Server LTS, not a distro fork.
+* **A cPanel-style management experience for Ubuntu** focused on self-hosted services, system operations, and modular software management.
+* **A control plane** for common operational workflows:
 
-  * networking, firewall, services, reverse proxy, logs, updates, backups
-* **A modular service system** (“crates”) with clean lifecycle management.
-* **A modpack-style filesystem layout** so configs/logs/state don’t get scattered.
-* **A multi-tenant server framework** with a cPanel-like UX: multiple users log in and manage services/modules through roles and permissions.
+  * networking, firewall, reverse proxy, services, logs, updates, backups, users, cron, and custom software
+* **A modular service and workload system** (“crates”) with clean install/enable/start/stop/disable/uninstall flows.
+* **A canonical filesystem and state model** so configs, logs, exports, runtime state, and service data are not scattered across the host.
+* **A multi-user operational framework** where people manage curated and custom modules through roles, permissions, and guided surfaces instead of raw host trivia.
 
 ## What CrateOS is not
 
-* A security product that tries to stop determined root users.
+* A product that tries to block or “outsmart” admins who already have `sudo`.
 * A replacement kernel or a new Linux distribution.
-* An app store clone without opinionated operational policy.
+* A generic app store with no opinionated operational model.
+* A promise that the shell never exists; it is a promise that the shell should not be the normal path for routine management.
+
+---
+
+## Core intent
+
+CrateOS exists to make Ubuntu server administration easier to deploy, easier to understand, and easier to recover without falling back into Linux tribal knowledge.
+
+The project is aimed at operators who want to:
+
+* drop in a machine and get to a usable managed state quickly
+* install and manage curated modules without hand-building every workflow
+* run custom software without reinventing service layout, policy, and maintenance every time
+* manage cron and scheduled workloads from a structured platform surface
+* avoid permission/path/newline/config mistakes caused by ad hoc CLI and FTP habits
+* keep the host customizable and extensible without turning it back into unmanaged Linux chaos
 
 ---
 
 ## Key features
 
-* **TUI-first administration**: SSH lands in a guided console instead of a raw shell.
-* **Controlled session surfaces**: local GUI and future virtual desktop entry points are intended to host CrateOS-owned sessions, not a normal distro desktop.
+* **CrateOS-first administration**: the machine lands in the CrateOS control surface instead of treating a raw shell as the normal operator interface.
+* **Optional web-panel posture**: the platform supports an appliance-style management surface beyond the terminal.
 * **Single canonical root**: configs, logs, state, modules, and service data live under `/srv/crateos`.
-* **Idempotent apply**: declarative configuration → desired state → agent applies safely.
-* **Self-healing networking**: headless-safe NetworkManager profiles with MAC-based matching.
-* **Managed reverse proxy**: nginx templates and a single mapping model.
-* **Modular services**: enable/disable/install/uninstall crates without guessing commands.
-* **Curated logging**: exported, readable logs (plus optional deep links to OS internals).
-* **Clean maintenance**: one-button cleanup (journald vacuum, docker prune, cache cleanup).
+* **Idempotent apply model**: declarative configuration → desired state → agent applies safely.
+* **Guided system management**: networking, reverse proxy, services, maintenance, and platform posture are exposed as supported workflows instead of “figure out the right command.”
+* **Modular services and software**: install, enable, disable, remove, and manage curated or custom modules with predictable lifecycle behavior.
+* **Cron and managed workload direction**: scheduled jobs and custom software are part of the intended platform scope, not an afterthought.
+* **Curated logging and exports**: readable logs and normalized system views instead of hunting through native paths by memory.
+* **Reduced operator footguns**: the platform is designed to minimize file-permission churn, path sprawl, config drift, and newline/transfer mistakes that commonly come from manual host handling.
+* **Admin escape hatches by intent**: authorized users can still access the underlying OS when needed; CrateOS just makes that the exception rather than the daily workflow.
 
 ---
 
@@ -113,7 +135,7 @@ CrateOS makes the OS layout an implementation detail. Users interact with **one 
 
 ### Components
 
-* **`crateos`**: interactive TUI + CLI
+* **`crateos`**: the primary operator interface and control surface
 * **`crateos-agent`**: local daemon (root) that applies desired state idempotently
 * **`crateos-policy`**: boot/periodic drift detection and repair
 * **(optional) web panel**: speaks to the agent via a local socket/API
@@ -196,7 +218,7 @@ systemctl status crateos-policy.timer --no-pager
 ```
 Default first-login credential for ISO seed user:
 
-* user: `crate`
+* user: the installer-seeded first operator from `images/common/seed-defaults.env` (default: `crate`)
 * password: `crateos` (expired in the target system during install; change required on first login)
 
 ### 4) Verify CrateOS root bootstrap
@@ -228,6 +250,7 @@ Confirm `/etc/ssh/sshd_config.d/10-crateos.conf` exists and includes:
 * ISO and qcow2 now share the same installed bootstrap-artifact verification path before runtime validation, reducing lane drift in machine-readiness checks.
 * ISO and qcow2 both derive their required base package list from `packaging/config/packages.yaml` instead of maintaining separate copied package blocks.
 * ISO and qcow2 both derive shared seed identity defaults (hostname, default user, password hash) from `images/common/seed-defaults.env`.
+* The installer identity user is promoted into `/srv/crateos/config/users.yaml` as the initial CrateOS admin rather than relying on a separate hardcoded framework account.
 * `crateos-policy.timer` now refreshes the canonical readiness report on a 2-minute cadence after boot; installed-host verification treats that report as stale after 3 minutes.
 * Run one-command verification on installed host:
 

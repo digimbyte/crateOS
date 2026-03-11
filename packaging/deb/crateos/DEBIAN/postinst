@@ -1,11 +1,46 @@
 #!/bin/bash
 set -e
 
+disable_stock_motd_script() {
+    local script="$1"
+    if [ -f "$script" ]; then
+        chmod 0644 "$script" 2>/dev/null || true
+    fi
+}
+
+chmod 755 /etc/update-motd.d/00-crateos-header 2>/dev/null || true
+chmod 755 /etc/update-motd.d/10-help-text 2>/dev/null || true
+disable_stock_motd_script /etc/update-motd.d/50-landscape-sysinfo
+disable_stock_motd_script /etc/update-motd.d/50-motd-news
+disable_stock_motd_script /etc/update-motd.d/80-livepatch
+disable_stock_motd_script /etc/update-motd.d/88-esm-announce
+disable_stock_motd_script /etc/update-motd.d/91-contract-ua-esm-status
+disable_stock_motd_script /etc/update-motd.d/91-release-upgrade
+disable_stock_motd_script /etc/update-motd.d/92-unattended-upgrades
+disable_stock_motd_script /etc/update-motd.d/95-hwe-eol
+disable_stock_motd_script /etc/update-motd.d/97-overlayroot
+disable_stock_motd_script /etc/update-motd.d/98-fsck-at-reboot
+disable_stock_motd_script /etc/update-motd.d/98-reboot-required
+mkdir -p /etc/default
+cat > /etc/default/motd-news <<'EOF'
+ENABLED=0
+EOF
+
 # Restart sshd to pick up ForceCommand installed by the package.
 if systemctl is-active --quiet sshd; then
     systemctl restart sshd
 elif systemctl is-active --quiet ssh; then
     systemctl restart ssh
+fi
+
+# Reload units when systemd is live on the current host.
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload
+    if command -v update-grub >/dev/null 2>&1; then
+        update-grub >/dev/null 2>&1 || true
+    elif command -v grub-mkconfig >/dev/null 2>&1; then
+        grub-mkconfig -o /boot/grub/grub.cfg >/dev/null 2>&1 || true
+    fi
 fi
 
 echo "crateos: installed successfully"

@@ -1,0 +1,4 @@
+#!/bin/sh
+printf 'Primary interface: CrateOS control surface\n'
+printf 'Base platform: Ubuntu noble derivative\n'
+printf 'Admin shell access is break-glass only.\n'

@@ -16,8 +16,8 @@ func (m model) updateMenu(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "enter":
 			return m.selectMenuItem()
 		case "q":
-			m.quitting = true
-			return m, tea.Quit
+			m.setCommandWarn("session exit is disabled; CrateOS is the active interface")
+			return m, nil
 		case "1":
 			m.enterStatusView()
 		case "2":
@@ -49,9 +49,6 @@ func (m model) selectMenuItem() (tea.Model, tea.Cmd) {
 		m.enterLogsView()
 	case 5:
 		m.enterNetworkView()
-	case 6:
-		m.quitting = true
-		return m, tea.Quit
 	}
 	m.cursor = 0
 	return m, nil
