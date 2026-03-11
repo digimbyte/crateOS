@@ -1,5 +1,5 @@
 #!/bin/bash
-set -euo pipefail
+set -eu
 
 if [ "$#" -lt 2 ] || [ "$#" -gt 3 ]; then
     echo "usage: fetch-cache.sh <scope> <url> [label]" >&2

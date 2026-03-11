@@ -13,3 +13,4 @@ coverage.out
 Thumbs.db
 .idea/
 .vscode/
+.cache/
