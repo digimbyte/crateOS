@@ -13,6 +13,7 @@ DIST="${REPO_ROOT}/dist"
 COMMON_DIR="${REPO_ROOT}/images/common"
 SEED_DEFAULTS="${COMMON_DIR}/seed-defaults.env"
 OVERLAY_DIR="${REPO_ROOT}/images/iso/overlay"
+FETCH_CACHE="${COMMON_DIR}/fetch-cache.sh"
 
 VERSION="${VERSION:-0.1.0-dev}"
 UBUNTU_RELEASES_INDEX="${UBUNTU_RELEASES_INDEX:-https://releases.ubuntu.com/noble/}"
@@ -48,6 +49,10 @@ if [ ! -f "${SEED_DEFAULTS}" ]; then
     echo "ERROR: seed defaults file not found: ${SEED_DEFAULTS}"
     exit 1
 fi
+if [ ! -f "${FETCH_CACHE}" ]; then
+    echo "ERROR: cache helper not found: ${FETCH_CACHE}"
+    exit 1
+fi
 if [ ! -f "${OVERLAY_DIR}/usr/local/bin/crateos-login-shell" ]; then
     echo "ERROR: missing CrateOS login shell overlay: ${OVERLAY_DIR}/usr/local/bin/crateos-login-shell"
     exit 1
@@ -61,11 +66,7 @@ fi
 source "${SEED_DEFAULTS}"
 
 # --- Download base ISO if not cached ---
-mkdir -p "${DIST}/cache"
-if [ ! -f "${DIST}/cache/${UBUNTU_ISO_NAME}" ]; then
-    echo "==> Downloading base Ubuntu ISO..."
-    wget -q --show-progress -O "${DIST}/cache/${UBUNTU_ISO_NAME}" "${UBUNTU_ISO_URL}"
-fi
+BASE_ISO_PATH="$(bash "${FETCH_CACHE}" "iso" "${UBUNTU_ISO_URL}" "base Ubuntu ISO")"
 
 # --- Extract ISO ---
 WORK="${DIST}/iso-work"
@@ -73,7 +74,7 @@ rm -rf "${WORK}"
 mkdir -p "${WORK}/source"
 
 echo "==> Extracting base ISO..."
-7z x -o"${WORK}/source" "${DIST}/cache/${UBUNTU_ISO_NAME}" > /dev/null
+7z x -o"${WORK}/source" "${BASE_ISO_PATH}" > /dev/null
 
 # --- Inject autoinstall ---
 REQUIRED_PACKAGES="$(bash "${COMMON_DIR}/render-required-packages.sh" "    ")"
@@ -223,7 +224,7 @@ fi
 
 # Replay the source ISO boot metadata rather than assuming an older isolinux layout.
 BOOT_OPTS="$(
-    xorriso -indev "${DIST}/cache/${UBUNTU_ISO_NAME}" \
+    xorriso -indev "${BASE_ISO_PATH}" \
         -report_el_torito as_mkisofs \
         -report_system_area as_mkisofs 2>/dev/null \
         | awk 'BEGIN { ORS=" " } /^[[:space:]]*-/ { sub(/^[[:space:]]+/, ""); printf "%s", $0 " " }'

@@ -1,6 +1,10 @@
 package tui
 
-import "strings"
+import (
+	"strings"
+
+	tea "github.com/charmbracelet/bubbletea"
+)
 
 func (m model) executeUserBatchMutation(rawTarget string, actionLabel string, emptyMessage string, errorPrefix string, partialPrefix string, successPrefix string, mutate func(userRow) error) (tea.Model, tea.Cmd) {
 	if !m.requireLiveControlPlane(actionLabel) {

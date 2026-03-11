@@ -3,7 +3,6 @@ package tui
 import (
 	"fmt"
 	tea "github.com/charmbracelet/bubbletea"
-	"sort"
 	"strings"
 )
 

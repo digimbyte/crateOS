@@ -10,7 +10,6 @@ import (
 	"github.com/crateos/crateos/internal/auth"
 	"github.com/crateos/crateos/internal/config"
 	"github.com/crateos/crateos/internal/modules"
-	"github.com/crateos/crateos/internal/platform"
 	"github.com/crateos/crateos/internal/state"
 )
 

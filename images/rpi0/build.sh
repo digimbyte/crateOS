@@ -12,6 +12,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DIST="${REPO_ROOT}/dist"
 COMMON_DIR="${REPO_ROOT}/images/common"
 SEED_DEFAULTS="${COMMON_DIR}/seed-defaults-rpi0.env"
+FETCH_CACHE="${COMMON_DIR}/fetch-cache.sh"
 
 VERSION="${VERSION:-0.1.0+rpi0-1}"
 RPI_OS_URL="${RPI_OS_URL:-https://downloads.raspberrypi.com/raspios_arm64/images/raspios_arm64-2024-03-15/2024-03-15-raspios-bookworm-arm64-lite.img.xz}"
@@ -34,19 +35,22 @@ if [ ! -f "${SEED_DEFAULTS}" ]; then
     echo "ERROR: seed defaults file not found: ${SEED_DEFAULTS}"
     exit 1
 fi
+if [ ! -f "${FETCH_CACHE}" ]; then
+    echo "ERROR: cache helper not found: ${FETCH_CACHE}"
+    exit 1
+fi
 
 # shellcheck disable=SC1090
 source "${SEED_DEFAULTS}"
 
 # --- Download base image if not cached ---
-mkdir -p "${DIST}/cache"
-if [ ! -f "${DIST}/cache/${RPI_OS_IMG}" ]; then
-    if [ ! -f "${DIST}/cache/${RPI_OS_NAME}" ]; then
-        echo "==> Downloading Raspberry Pi OS Lite image..."
-        wget -q --show-progress -O "${DIST}/cache/${RPI_OS_NAME}" "${RPI_OS_URL}"
-    fi
+RPI_ARCHIVE_PATH="$(bash "${FETCH_CACHE}" "rpi0" "${RPI_OS_URL}" "Raspberry Pi OS Lite archive")"
+CACHE_DIR="$(dirname "${RPI_ARCHIVE_PATH}")"
+if [ ! -f "${CACHE_DIR}/${RPI_OS_IMG}" ]; then
     echo "==> Extracting Raspberry Pi OS Lite image..."
-    xz -d "${DIST}/cache/${RPI_OS_NAME}"
+    xz -d "${RPI_ARCHIVE_PATH}"
+else
+    echo "==> Reusing cached Raspberry Pi OS Lite image: ${CACHE_DIR}/${RPI_OS_IMG}"
 fi
 
 # --- Mount and customize image ---
@@ -54,7 +58,7 @@ WORK="${DIST}/rpi0-work"
 rm -rf "${WORK}"
 mkdir -p "${WORK}"
 
-IMG="${DIST}/cache/${RPI_OS_IMG}"
+IMG="${CACHE_DIR}/${RPI_OS_IMG}"
 MOUNT_POINT="${WORK}/mnt"
 mkdir -p "${MOUNT_POINT}"
 

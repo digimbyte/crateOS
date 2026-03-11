@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"github.com/crateos/crateos/internal/api"
 	"github.com/crateos/crateos/internal/config"
 	"log"
 	"os"

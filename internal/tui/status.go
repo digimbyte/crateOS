@@ -2,8 +2,6 @@ package tui
 
 import (
 	"fmt"
-	tea "github.com/charmbracelet/bubbletea"
-	"strings"
 )
 
 func (m model) viewStatus() string {

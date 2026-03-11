@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/crateos/crateos/internal/config"
 	"github.com/crateos/crateos/internal/modules"

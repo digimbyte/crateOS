@@ -11,6 +11,7 @@ REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
 DIST="${REPO_ROOT}/dist"
 COMMON_DIR="${REPO_ROOT}/images/common"
 SEED_DEFAULTS="${COMMON_DIR}/seed-defaults.env"
+FETCH_CACHE="${COMMON_DIR}/fetch-cache.sh"
 
 VERSION="${VERSION:-0.1.0-dev}"
 CLOUD_IMG_URL="${CLOUD_IMG_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
@@ -31,6 +32,10 @@ if [ ! -f "${SEED_DEFAULTS}" ]; then
     echo "ERROR: seed defaults file not found: ${SEED_DEFAULTS}"
     exit 1
 fi
+if [ ! -f "${FETCH_CACHE}" ]; then
+    echo "ERROR: cache helper not found: ${FETCH_CACHE}"
+    exit 1
+fi
 
 # shellcheck disable=SC1090
 source "${SEED_DEFAULTS}"
@@ -41,15 +46,11 @@ if ! ls "${DIST}"/*.deb >/dev/null 2>&1; then
 fi
 
 # --- Download cloud image if not cached ---
-mkdir -p "${DIST}/cache"
-if [ ! -f "${DIST}/cache/${CLOUD_IMG_NAME}" ]; then
-    echo "==> Downloading noble cloud baseline..."
-    wget -q --show-progress -O "${DIST}/cache/${CLOUD_IMG_NAME}" "${CLOUD_IMG_URL}"
-fi
+CLOUD_IMAGE_PATH="$(bash "${FETCH_CACHE}" "qcow2" "${CLOUD_IMG_URL}" "noble cloud baseline")"
 
 # --- Create working copy ---
 OUTPUT="${DIST}/crateos-${VERSION}.qcow2"
-cp "${DIST}/cache/${CLOUD_IMG_NAME}" "${OUTPUT}"
+cp "${CLOUD_IMAGE_PATH}" "${OUTPUT}"
 
 # --- Resize disk (optional, default 20G) ---
 echo "==> Resizing image to 20G..."
