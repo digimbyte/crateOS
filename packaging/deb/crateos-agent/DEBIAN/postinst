@@ -35,11 +35,4 @@ ln -sf /lib/systemd/system/crateos-agent-watchdog.timer /etc/systemd/system/time
 mkdir -p "${CRATE_ROOT}/logs"
 touch "${CRATE_ROOT}/logs/agent-watchdog.log"
 
-# Start immediately when systemd is live on the current host.
-if [ -d /run/systemd/system ]; then
-    systemctl daemon-reload
-    systemctl start crateos-agent.service
-    systemctl start crateos-agent-watchdog.timer
-fi
-
-echo "crateos-agent: installed and watchdog timer started"
+echo "crateos-agent: installed and enabled for first boot"

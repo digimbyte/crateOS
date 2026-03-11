@@ -148,6 +148,27 @@ if [ -f "${WORK}/source/.disk/info" ]; then
     printf 'CrateOS %s LTS - Release amd64\n' "${VERSION}" > "${WORK}/source/.disk/info"
 fi
 
+if [ -f "${WORK}/source/casper/install-sources.yaml" ]; then
+    INSTALL_SOURCES_PATH="${WORK}/source/casper/install-sources.yaml" python3 <<'PY'
+import os
+from pathlib import Path
+
+path = Path(os.environ["INSTALL_SOURCES_PATH"])
+content = path.read_text(encoding="utf-8", errors="ignore")
+replacements = [
+    ("Ubuntu Server (minimized)", "Crate + Ubuntu Server (minimized)"),
+    ("Ubuntu Server", "Crate + Ubuntu Server"),
+    ("The default install contains a curated set of packages for server use.", "CrateOS layers its control surface on the standard Ubuntu Server base."),
+    ("This version has been customized to have a small runtime footprint and does not include support for many common interactive features.", "This variant keeps the CrateOS control surface on a smaller Ubuntu Server base."),
+]
+updated = content
+for old, new in replacements:
+    updated = updated.replace(old, new)
+if updated != content:
+    path.write_text(updated, encoding="utf-8")
+PY
+fi
+
 # Refresh ISO checksums after mutating media contents.
 if [ -f "${WORK}/source/md5sum.txt" ]; then
     (

@@ -5,10 +5,4 @@ set -e
 mkdir -p /etc/systemd/system/timers.target.wants
 ln -sf /lib/systemd/system/crateos-policy.timer /etc/systemd/system/timers.target.wants/crateos-policy.timer
 
-# Start immediately when systemd is live on the current host.
-if [ -d /run/systemd/system ]; then
-    systemctl daemon-reload
-    systemctl start crateos-policy.timer
-fi
-
-echo "crateos-policy: timer installed and started"
+echo "crateos-policy: timer installed and enabled for first boot"

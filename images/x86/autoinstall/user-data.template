@@ -17,6 +17,10 @@ autoinstall:
     install-server: true
     allow-pw: true
 
+  source:
+    search_drivers: false
+    id: ubuntu-server
+
   # Derived from packaging/config/packages.yaml (required)
   packages:
 __REQUIRED_PACKAGES__
@@ -24,6 +28,7 @@ __REQUIRED_PACKAGES__
   late-commands:
     # Install CrateOS packages from ISO media (mandatory for this installer).
     - |
+      cd /
       if [ ! -d /cdrom/crateos-debs ]; then
         echo "CrateOS debs not found on media — failing install"
         exit 1
@@ -32,8 +37,10 @@ __REQUIRED_PACKAGES__
         echo "No CrateOS .deb files found on media — failing install"
         exit 1
       fi
-      cp /cdrom/crateos-debs/*.deb /target/tmp/
-      curtin in-target -- dpkg -i /tmp/crateos*.deb || curtin in-target -- apt-get -f install -y
+      install -d /target/var/tmp/crateos-debs
+      cp /cdrom/crateos-debs/*.deb /target/var/tmp/crateos-debs/
+      sync
+      curtin in-target -- sh -c 'dpkg -i /var/tmp/crateos-debs/*.deb || apt-get -f install -y'
       python3 - <<'PY'
       from pathlib import Path
 
@@ -43,6 +50,15 @@ __REQUIRED_PACKAGES__
       users_path.write_text(content, encoding="utf-8")
       PY
       curtin in-target -- usermod -s /usr/local/bin/crateos-shell-wrapper __DEFAULT_USER__
+      mkdir -p /target/etc/ssh/sshd_config.d
+      cat > /target/etc/ssh/sshd_config.d/10-crateos.conf <<'EOF'
+      # CrateOS: force SSH sessions into the CrateOS console.
+      # Users land in the TUI instead of a raw shell.
+      # Admin break-glass access is handled via the console's escape hatch.
+      ForceCommand /usr/local/bin/crateos console
+      EOF
+      chmod 0644 /target/etc/ssh/sshd_config.d/10-crateos.conf
+      chmod 0755 /target/usr/local/bin/crateos-shell-wrapper || true
       mkdir -p /target/etc/systemd/system/getty@tty1.service.d
       cat > /target/etc/systemd/system/getty@tty1.service.d/override.conf <<'EOF'
       [Service]
@@ -51,7 +67,8 @@ __REQUIRED_PACKAGES__
       Type=idle
       EOF
       curtin in-target -- chage -d 0 __DEFAULT_USER__
-      rm -f /target/tmp/crateos*.deb
+      rm -rf /target/var/tmp/crateos-debs
+      sync
       if ! curtin in-target -- /usr/local/bin/verify-bootstrap-artifacts; then
         echo "CrateOS bootstrap artifact verification failed in target rootfs after package install — failing install"
         exit 1
