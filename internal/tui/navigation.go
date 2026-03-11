@@ -46,6 +46,12 @@ func roleBadge(role string) string {
 }
 
 func (m *model) enterMenuView() {
+	if m.primerRequired {
+		m.currentView = viewSetup
+		m.cursor = 0
+		m.logSourceCursor = 0
+		return
+	}
 	m.refreshOverview()
 	m.currentView = viewMenu
 	m.cursor = 0
@@ -53,6 +59,10 @@ func (m *model) enterMenuView() {
 }
 
 func (m *model) enterStatusView() {
+	if m.primerRequired {
+		m.currentView = viewSetup
+		return
+	}
 	m.refreshOverview()
 	m.currentView = viewStatus
 	m.cursor = 0
@@ -62,6 +72,10 @@ func (m *model) enterStatusView() {
 }
 
 func (m *model) enterDiagnosticsView() {
+	if m.primerRequired {
+		m.currentView = viewSetup
+		return
+	}
 	m.refreshOverview()
 	m.currentView = viewDiagnostics
 	m.cursor = 0
@@ -71,6 +85,10 @@ func (m *model) enterDiagnosticsView() {
 }
 
 func (m *model) enterServicesView() {
+	if m.primerRequired {
+		m.currentView = viewSetup
+		return
+	}
 	m.refreshServices()
 	m.currentView = viewServices
 	m.cursor = 0
@@ -78,6 +96,10 @@ func (m *model) enterServicesView() {
 }
 
 func (m *model) enterUsersView() {
+	if m.primerRequired {
+		m.currentView = viewSetup
+		return
+	}
 	m.refreshUsers()
 	m.currentView = viewUsers
 	m.cursor = 0
@@ -85,6 +107,10 @@ func (m *model) enterUsersView() {
 }
 
 func (m *model) enterLogsView() {
+	if m.primerRequired {
+		m.currentView = viewSetup
+		return
+	}
 	m.refreshOverview()
 	m.currentView = viewLogs
 	m.cursor = 0
@@ -92,6 +118,10 @@ func (m *model) enterLogsView() {
 }
 
 func (m *model) enterNetworkView() {
+	if m.primerRequired {
+		m.currentView = viewSetup
+		return
+	}
 	m.refreshOverview()
 	m.interfaces = sysinfo.NetworkInterfaces()
 	m.currentView = viewNetwork

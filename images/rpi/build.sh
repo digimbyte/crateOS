@@ -131,6 +131,24 @@ dpkg -i *.deb || apt-get install -f -y
 echo "==> Setting up default user..."
 /root/create-user.sh
 
+echo "==> Enforcing CrateOS local console takeover..."
+test -x /usr/local/bin/crateos-login-shell
+usermod -s /usr/local/bin/crateos-login-shell "${DEFAULT_USER}"
+getent passwd "${DEFAULT_USER}" | grep ':/usr/local/bin/crateos-login-shell$'
+mkdir -p /etc/systemd/system/getty@tty1.service.d
+cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<EOF
+[Service]
+ExecStart=
+ExecStart=-/sbin/agetty --noissue --autologin ${DEFAULT_USER} %I \$TERM
+Type=idle
+EOF
+chmod 0644 /etc/systemd/system/getty@tty1.service.d/override.conf
+grep -q -- '--autologin ${DEFAULT_USER}' /etc/systemd/system/getty@tty1.service.d/override.conf
+chmod 0755 /usr/local/bin/crateos-login-shell
+systemctl daemon-reload || true
+systemctl restart getty@tty1.service || true
+/usr/local/bin/verify-bootstrap-artifacts
+
 echo "==> Disabling first-boot service..."
 systemctl disable crateos-install.service || true
 rm -f /etc/systemd/system/crateos-install.service

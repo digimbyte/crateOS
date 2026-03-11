@@ -254,6 +254,22 @@ func loadYAML(path string, target interface{}) error {
 	return yaml.Unmarshal(data, target)
 }
 
+// SaveCrateOS writes the top-level crateos config back to crateos.yaml.
+func SaveCrateOS(cfg *Config) error {
+	path := filepath.Join(platform.CratePath("config"), "crateos.yaml")
+	b, err := yaml.Marshal(cfg.CrateOS)
+	if err != nil {
+		return err
+	}
+	if err := os.WriteFile(path, b, 0644); err != nil {
+		return err
+	}
+	if _, err = NormalizeFileIfNeeded(path); err != nil {
+		return err
+	}
+	return trackManagedConfigWrite(path, "crateos")
+}
+
 // SaveServices writes the services config back to services.yaml.
 func SaveServices(cfg *Config) error {
 	path := filepath.Join(platform.CratePath("config"), "services.yaml")

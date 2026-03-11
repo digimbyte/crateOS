@@ -17,6 +17,13 @@ func (m model) executeSystemCommand(mod string, params []string) (tea.Model, tea
 	switch mod {
 	case "refresh", "reload":
 		m.refreshOverview()
+		m.refreshUsers()
+		m.refreshPrimerState()
+		if m.primerRequired {
+			m.currentView = viewSetup
+			m.setCommandWarn("primer still blocking normal console access")
+			return m, nil
+		}
 		m.setCommandOK("state refreshed")
 		return m, nil
 	case "dos2unix", "normalize", "lineendings":
@@ -96,6 +103,11 @@ func runDos2UnixHealth(scope string) (int, error) {
 }
 
 func (m model) executeNavigationCommand(target string) (tea.Model, tea.Cmd) {
+	if m.primerRequired && target != "setup" {
+		m.currentView = viewSetup
+		m.setCommandWarn("primer completion required before navigation")
+		return m, nil
+	}
 	switch target {
 	case "setup":
 		m.currentView = viewSetup

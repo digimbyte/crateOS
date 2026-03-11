@@ -5,7 +5,7 @@ set -euo pipefail
 # Requires: xorriso, p7zip-full (or 7z), wget
 #
 # Usage:
-#   bash images/iso/build.sh  # embeds CrateOS debs and builds forced-install CrateOS media
+#   bash images/iso/build.sh  # generic ISO build lane sharing the CrateOS autoinstall pipeline
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_ROOT="$(cd "$SCRIPT_DIR/../.." && pwd)"
@@ -46,6 +46,14 @@ done
 
 if [ ! -f "${SEED_DEFAULTS}" ]; then
     echo "ERROR: seed defaults file not found: ${SEED_DEFAULTS}"
+    exit 1
+fi
+if [ ! -f "${OVERLAY_DIR}/usr/local/bin/crateos-login-shell" ]; then
+    echo "ERROR: missing CrateOS login shell overlay: ${OVERLAY_DIR}/usr/local/bin/crateos-login-shell"
+    exit 1
+fi
+if [ ! -f "${OVERLAY_DIR}/etc/systemd/system/getty@tty1.service.d/override.conf.template" ]; then
+    echo "ERROR: missing CrateOS tty1 override overlay: ${OVERLAY_DIR}/etc/systemd/system/getty@tty1.service.d/override.conf.template"
     exit 1
 fi
 

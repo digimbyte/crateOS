@@ -13,6 +13,7 @@ import (
 	"github.com/crateos/crateos/internal/config"
 
 	"github.com/crateos/crateos/internal/platform"
+	"github.com/crateos/crateos/internal/takeover"
 )
 
 const (
@@ -24,11 +25,6 @@ const (
 const (
 	crateOSHeaderScript = "#!/bin/sh\nprintf 'CrateOS\\n'\nprintf 'Ubuntu-derived framework appliance\\n'\n"
 	crateOSHelpScript   = "#!/bin/sh\nprintf 'Primary interface: CrateOS control surface\\n'\nprintf 'Base platform: Ubuntu noble derivative\\n'\nprintf 'Admin shell access is break-glass only.\\n'\n"
-	crateOSSSHDropIn    = "# CrateOS: force SSH sessions into the CrateOS console.\n# Users land in the TUI instead of a raw shell.\n# Admin break-glass access is handled via the console's escape hatch.\nForceCommand /usr/local/bin/crateos console\n"
-	crateOSIssue        = "CrateOS - Ubuntu-derived framework appliance \\n \\l\n"
-	crateOSIssueNet     = "CrateOS - Ubuntu-derived framework appliance\n"
-	crateOSRelease      = "NAME=\"CrateOS\"\nPRETTY_NAME=\"CrateOS (Ubuntu noble derivative)\"\nID=crateos\nID_LIKE=ubuntu debian\nVERSION=\"0.1.0+noble1\"\nVERSION_ID=\"0.1.0\"\nVERSION_CODENAME=noble\nHOME_URL=\"https://crateos.local\"\nSUPPORT_URL=\"https://crateos.local/support\"\nBUG_REPORT_URL=\"https://crateos.local/issues\"\n"
-	crateOSLSBRelease   = "DISTRIB_ID=CrateOS\nDISTRIB_RELEASE=0.1.0\nDISTRIB_CODENAME=noble\nDISTRIB_DESCRIPTION=\"CrateOS (Ubuntu noble derivative)\"\n"
 	crateOSGrubBranding = "GRUB_DISTRIBUTOR=\"CrateOS\"\n"
 )
 
@@ -143,7 +139,7 @@ func ensureCrateDirectories(_ *config.Config) error {
 }
 
 func ensureSSHDropIn(_ *config.Config) error {
-	if err := writeManagedFile("/etc/ssh/sshd_config.d/10-crateos.conf", crateOSSSHDropIn, 0644); err != nil {
+	if err := takeover.EnsureSSHDropIn(); err != nil {
 		return fmt.Errorf("ensure ssh drop-in: %w", err)
 	}
 	if err := restartServiceIfActive("sshd", "ssh"); err != nil {
@@ -153,8 +149,8 @@ func ensureSSHDropIn(_ *config.Config) error {
 }
 
 func ensureShellWrapperPermissions(_ *config.Config) error {
-	if err := os.Chmod("/usr/local/bin/crateos-login-shell", 0755); err != nil && !os.IsNotExist(err) {
-		return fmt.Errorf("chmod login shell: %w", err)
+	if err := takeover.RepairLocalConsoleContract(""); err != nil && !os.IsNotExist(err) {
+		return fmt.Errorf("ensure login shell: %w", err)
 	}
 	if err := os.Chmod("/usr/local/bin/crateos-shell-wrapper", 0755); err != nil && !os.IsNotExist(err) {
 		return fmt.Errorf("chmod shell wrapper: %w", err)
@@ -181,20 +177,8 @@ func ensureMOTDState(_ *config.Config) error {
 }
 
 func ensureIdentityFiles(_ *config.Config) error {
-	managed := []struct {
-		path string
-		body string
-		mode os.FileMode
-	}{
-		{path: "/etc/issue", body: crateOSIssue, mode: 0644},
-		{path: "/etc/issue.net", body: crateOSIssueNet, mode: 0644},
-		{path: "/etc/os-release", body: crateOSRelease, mode: 0644},
-		{path: "/etc/lsb-release", body: crateOSLSBRelease, mode: 0644},
-	}
-	for _, file := range managed {
-		if err := writeManagedFile(file.path, file.body, file.mode); err != nil {
-			return fmt.Errorf("ensure identity file %s: %w", file.path, err)
-		}
+	if err := takeover.EnsureIdentityFiles(); err != nil {
+		return fmt.Errorf("ensure identity files: %w", err)
 	}
 	return nil
 }
@@ -225,13 +209,10 @@ func ensureTTYOverride(cfg *config.Config) error {
 		return nil
 	}
 
-	override := fmt.Sprintf("[Service]\nExecStart=\nExecStart=-/sbin/agetty --noissue --autologin %s %%I $TERM\nType=idle\n", username)
-	path := "/etc/systemd/system/getty@tty1.service.d/override.conf"
-	if err := os.MkdirAll(filepath.Dir(path), 0755); err != nil {
-		return fmt.Errorf("ensure tty1 override dir: %w", err)
-	}
+	path := takeover.TTYOverridePath()
 	before, _ := os.ReadFile(path)
-	if err := writeManagedFile(path, override, 0644); err != nil {
+	override := takeover.RenderTTYOverride(username)
+	if err := takeover.RepairLocalConsoleContract(username); err != nil {
 		return fmt.Errorf("ensure tty1 override: %w", err)
 	}
 	if string(before) != override {

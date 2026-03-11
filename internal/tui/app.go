@@ -1,12 +1,16 @@
 package tui
 
 import (
+	"os"
 	"strings"
 
 	tea "github.com/charmbracelet/bubbletea"
 
 	"github.com/crateos/crateos/internal/config"
+	"github.com/crateos/crateos/internal/platform"
 	"github.com/crateos/crateos/internal/sysinfo"
+	"github.com/crateos/crateos/internal/takeover"
+	"github.com/crateos/crateos/internal/users"
 )
 
 func (m model) controlPlaneMode() string {
@@ -14,6 +18,28 @@ func (m model) controlPlaneMode() string {
 		return "agent-live"
 	}
 	return "fallback-local"
+}
+
+func readInitialPrimerHostname() string {
+	cfg, err := config.Load()
+	if err == nil {
+		if hostname := strings.TrimSpace(cfg.CrateOS.Platform.Hostname); hostname != "" {
+			return hostname
+		}
+	}
+	info := sysinfo.Gather()
+	if hostname := strings.TrimSpace(info.Hostname); hostname != "" {
+		return hostname
+	}
+	return "crateos"
+}
+
+func platformInfoHostname(platformInfo PlatformInfo, fallback string) string {
+	fallback = strings.TrimSpace(fallback)
+	if fallback != "" {
+		return fallback
+	}
+	return readInitialPrimerHostname()
 }
 
 func normalizeServiceAction(action string) string {
@@ -47,6 +73,18 @@ func (m *model) bootstrapAdmin(name string) bool {
 			return false
 		}
 	}
+	if len(cfg.Users.Users) > 0 {
+		return false
+	}
+	if cfg.Users.Roles == nil {
+		cfg.Users.Roles = map[string]config.Role{}
+	}
+	if _, ok := cfg.Users.Roles["admin"]; !ok {
+		cfg.Users.Roles["admin"] = config.Role{
+			Description: "Full platform access including break-glass shell",
+			Permissions: []string{"*"},
+		}
+	}
 	// Add admin user
 	cfg.Users.Users = append(cfg.Users.Users, config.UserEntry{
 		Name:        name,
@@ -62,6 +100,61 @@ func (m *model) bootstrapAdmin(name string) bool {
 	m.refreshUsers()
 	m.refreshServices()
 	m.info = sysinfo.Gather()
+	m.refreshPrimerState()
+	if m.primerRequired {
+		m.currentView = viewSetup
+	}
+	return true
+}
+
+func (m *model) refreshPrimerStatusMessage() {
+	m.refreshPrimerState()
+	if m.primerRequired {
+		m.currentView = viewSetup
+		m.setCommandWarn("primer checks refreshed; blocking setup remains")
+		return
+	}
+	m.setCommandOK("primer complete: console unlocked")
+}
+
+func (m *model) savePrimerIdentity() bool {
+	hostname := strings.TrimSpace(m.setupHostname)
+	if hostname == "" {
+		return false
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return false
+	}
+	cfg.CrateOS.Platform.Hostname = hostname
+	if err := config.SaveCrateOS(cfg); err != nil {
+		return false
+	}
+	m.setupHostname = hostname
+	m.refreshPrimerState()
+	return true
+}
+
+func (m *model) applyPrimerTakeover() bool {
+	cfg, err := config.Load()
+	if err != nil {
+		return false
+	}
+	username := ""
+	if len(cfg.Users.Users) > 0 {
+		username = strings.TrimSpace(cfg.Users.Users[0].Name)
+	}
+	return takeover.RepairLocalInstallContract(username) == nil
+}
+
+func (m *model) provisionPrimerUsers() bool {
+	cfg, err := config.Load()
+	if err != nil {
+		return false
+	}
+	if _, _, err := users.ProvisionUsers(cfg); err != nil {
+		return false
+	}
 	return true
 }
 
@@ -70,12 +163,8 @@ func NewModel() model {
 	startUser := selectInitialUser()
 	if info, svcs, platformInfo, diagnostics, usr := fetchStatusViaAPI(startUser); info != nil {
 		users := fetchUsersViaAPI(startUser)
-		startView := viewMenu
-		if len(users) == 0 {
-			startView = viewSetup
-		}
-		return model{
-			currentView:        startView,
+		m := model{
+			currentView:        viewMenu,
 			info:               *info,
 			interfaces:         sysinfo.NetworkInterfaces(),
 			services:           svcs,
@@ -84,17 +173,20 @@ func NewModel() model {
 			users:              users,
 			currentUser:        usr,
 			newUserRole:        "staff",
+			setupField:         0,
 			setupAdmin:         "admin",
+			setupHostname:      strings.TrimSpace(platformInfoHostname(platformInfo, info.Hostname)),
 			controlPlaneOnline: true,
 		}
+		m.refreshPrimerState()
+		if m.primerRequired {
+			m.currentView = viewSetup
+		}
+		return m
 	}
 	users := fetchUsersFromConfig()
-	startView := viewMenu
-	if len(users) == 0 {
-		startView = viewSetup
-	}
-	return model{
-		currentView:        startView,
+	m := model{
+		currentView:        viewMenu,
 		info:               sysinfo.Gather(),
 		interfaces:         sysinfo.NetworkInterfaces(),
 		services:           gatherServices(),
@@ -103,9 +195,16 @@ func NewModel() model {
 		users:              users,
 		currentUser:        startUser,
 		newUserRole:        "staff",
+		setupField:         0,
 		setupAdmin:         "admin",
+		setupHostname:      strings.TrimSpace(readInitialPrimerHostname()),
 		controlPlaneOnline: false,
 	}
+	m.refreshPrimerState()
+	if m.primerRequired {
+		m.currentView = viewSetup
+	}
+	return m
 }
 
 func (m model) Init() tea.Cmd { return nil }
@@ -133,6 +232,9 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 				return m, nil
 			}
 		}
+	}
+	if m.primerRequired && m.currentView != viewSetup {
+		m.currentView = viewSetup
 	}
 
 	switch m.currentView {
@@ -186,6 +288,58 @@ func Run() error {
 	p := tea.NewProgram(NewModel(), tea.WithAltScreen())
 	_, err := p.Run()
 	return err
+}
+
+func (m *model) refreshPrimerState() {
+	checks := make([]primerCheck, 0, 5)
+	installedMarker := platform.CratePath("state", "installed.json")
+	if _, err := os.Stat(installedMarker); err == nil {
+		checks = append(checks, primerCheck{Label: "Install marker", OK: true, Details: installedMarker})
+	} else {
+		checks = append(checks, primerCheck{Label: "Install marker", OK: false, Details: "missing " + installedMarker})
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		checks = append(checks, primerCheck{Label: "Config load", OK: false, Details: err.Error()})
+		m.primerChecks = checks
+		m.primerRequired = true
+		return
+	}
+	admins := 0
+	firstAdmin := ""
+	for _, u := range cfg.Users.Users {
+		if strings.TrimSpace(u.Role) == "admin" && strings.TrimSpace(u.Name) != "" {
+			admins++
+			if firstAdmin == "" {
+				firstAdmin = strings.TrimSpace(u.Name)
+			}
+		}
+	}
+	if admins > 0 {
+		checks = append(checks, primerCheck{Label: "Initial admin", OK: true, Details: "admins configured"})
+	} else {
+		checks = append(checks, primerCheck{Label: "Initial admin", OK: false, Details: "no admin in users.yaml"})
+	}
+	for _, check := range takeover.EvaluateLocalInstallContract(firstAdmin) {
+		checks = append(checks, primerCheck{
+			Label:   check.Label,
+			OK:      check.OK,
+			Details: check.Details,
+		})
+	}
+	if strings.TrimSpace(cfg.CrateOS.Platform.Hostname) != "" {
+		checks = append(checks, primerCheck{Label: "Machine identity", OK: true, Details: cfg.CrateOS.Platform.Hostname})
+	} else {
+		checks = append(checks, primerCheck{Label: "Machine identity", OK: false, Details: "hostname not set in crateos.yaml"})
+	}
+	m.primerChecks = checks
+	m.primerRequired = false
+	for _, check := range checks {
+		if !check.OK {
+			m.primerRequired = true
+			break
+		}
+	}
 }
 
 func (m *model) clampOwnershipCursor() {

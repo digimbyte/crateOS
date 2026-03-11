@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"github.com/crateos/crateos/internal/api"
 	"github.com/crateos/crateos/internal/config"
 	"log"
 	"os"
@@ -52,7 +51,7 @@ func printUsage() {
 	fmt.Println("  crateos console   Enter the CrateOS interactive console")
 	fmt.Println("  crateos status    Show system status summary")
 	fmt.Println("  crateos version   Print version information")
-	fmt.Println("  crateos bootstrap <name>                Create first admin when users are missing")
+	fmt.Println("  crateos bootstrap <name>                Create the first admin for primer recovery when users are missing")
 	fmt.Println("  crateos service enable|disable|start|stop <name>   Manage services")
 	fmt.Println("  crateos user add <name> <role>          Add a user with role")
 	fmt.Println("  crateos user del <name>                 Delete a user")
@@ -99,7 +98,7 @@ func resolveCLIUser() string {
 func requireCLIUser() string {
 	user := resolveCLIUser()
 	if user == "" {
-		fmt.Fprintln(os.Stderr, "no configured operator found; run: crateos bootstrap <name>")
+		fmt.Fprintln(os.Stderr, "no configured operator found; complete the CrateOS primer or run: crateos bootstrap <name>")
 		os.Exit(1)
 	}
 	return user
@@ -110,7 +109,30 @@ func handleBootstrapCmd(args []string) {
 		fmt.Println("usage: crateos bootstrap <name>")
 		os.Exit(1)
 	}
-	if err := api.NewClient("").Bootstrap(strings.TrimSpace(args[0])); err != nil {
+	name := strings.TrimSpace(args[0])
+	cfg, err := config.Load()
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "bootstrap failed: %v\n", err)
+		os.Exit(1)
+	}
+	if len(cfg.Users.Users) > 0 {
+		fmt.Fprintln(os.Stderr, "bootstrap failed: users already configured")
+		os.Exit(1)
+	}
+	if cfg.Users.Roles == nil {
+		cfg.Users.Roles = map[string]config.Role{}
+	}
+	if _, ok := cfg.Users.Roles["admin"]; !ok {
+		cfg.Users.Roles["admin"] = config.Role{
+			Description: "Full platform access including break-glass shell",
+			Permissions: []string{"*"},
+		}
+	}
+	cfg.Users.Users = append(cfg.Users.Users, config.UserEntry{
+		Name: name,
+		Role: "admin",
+	})
+	if err := config.SaveUsers(cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "bootstrap failed: %v\n", err)
 		os.Exit(1)
 	}

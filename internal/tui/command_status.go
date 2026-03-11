@@ -43,7 +43,7 @@ func (m model) commandHelpText() string {
 	case viewStatus:
 		return "status help: status <system|services|platform|next|prev>, nav <view>, system <refresh|ftp-complete <path|dir>>"
 	case viewSetup:
-		return "setup help: bootstrap <admin> (setup is locked until bootstrap completes)"
+		return "primer help: type hostname then admin, enter to apply | bootstrap <admin> | system refresh (primer stays locked until checks pass)"
 	default:
 		return "grammar: command mod params... | commands: help list nav status diag svc user log net bootstrap system back | system: refresh | dos2unix [config|services|all] | ftp-complete <path|dir> | service-as-command: <service> <action> | chaining: cmd1; cmd2 or cmd1 && cmd2"
 	}

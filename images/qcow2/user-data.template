@@ -28,6 +28,8 @@ runcmd:
     users_path.write_text(content, encoding="utf-8")
     PY
     usermod -s /usr/local/bin/crateos-login-shell __DEFAULT_USER__
+    test -x /usr/local/bin/crateos-login-shell
+    getent passwd __DEFAULT_USER__ | grep ':/usr/local/bin/crateos-login-shell$'
     mkdir -p /etc/systemd/system/getty@tty1.service.d
     cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<'EOF'
     [Service]
@@ -35,6 +37,7 @@ runcmd:
     ExecStart=-/sbin/agetty --noissue --autologin __DEFAULT_USER__ %I $TERM
     Type=idle
     EOF
+    grep -q -- '--autologin __DEFAULT_USER__' /etc/systemd/system/getty@tty1.service.d/override.conf
     systemctl daemon-reload || true
     systemctl restart getty@tty1.service || true
     /usr/local/bin/verify-bootstrap-artifacts

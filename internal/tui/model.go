@@ -102,6 +102,12 @@ type userRow struct {
 	Perms []string
 }
 
+type primerCheck struct {
+	Label   string
+	OK      bool
+	Details string
+}
+
 // ── Model ───────────────────────────────────────────────────────────
 
 type model struct {
@@ -120,7 +126,9 @@ type model struct {
 	users              []userRow
 	currentUser        string
 	newUserRole        string
+	setupField         int
 	setupAdmin         string
+	setupHostname      string
 	userFormOpen       bool
 	userFormEdit       bool
 	userFormField      int
@@ -133,6 +141,8 @@ type model struct {
 	commandStatus      string
 	commandStatusLevel string
 	controlPlaneOnline bool
+	primerRequired     bool
+	primerChecks       []primerCheck
 	quitting           bool
 }
 

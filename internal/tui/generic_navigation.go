@@ -7,7 +7,11 @@ func (m model) updateGeneric(msg tea.Msg) (tea.Model, tea.Cmd) {
 	if msg, ok := msg.(tea.KeyMsg); ok {
 		switch msg.String() {
 		case "esc", "backspace", "q":
-			m.enterMenuView()
+			if m.primerRequired {
+				m.currentView = viewSetup
+			} else {
+				m.enterMenuView()
+			}
 		}
 	}
 	return m, nil

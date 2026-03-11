@@ -76,9 +76,9 @@ func (m model) executeSingleCommand(raw string) (tea.Model, tea.Cmd) {
 	cmd := strings.ToLower(args[0])
 	if m.currentView == viewSetup {
 		switch cmd {
-		case "help", "?", "bootstrap":
+		case "help", "?", "bootstrap", "system":
 		default:
-			m.setCommandWarn("bootstrap required before control-plane commands")
+			m.setCommandWarn("primer completion required before control-plane commands")
 			return m, nil
 		}
 	}
@@ -143,9 +143,6 @@ func (m model) executeSingleCommand(raw string) (tea.Model, tea.Cmd) {
 			m.setCommandWarn("usage: bootstrap <admin>")
 			return m, nil
 		}
-		if !m.requireLiveControlPlane("bootstrap") {
-			return m, nil
-		}
 		if ok := m.bootstrapAdmin(name); !ok {
 			m.setCommandError("bootstrap failed: " + name)
 			return m, nil
@@ -169,6 +166,11 @@ func (m model) executeSingleCommand(raw string) (tea.Model, tea.Cmd) {
 	case "system":
 		return m.executeSystemCommand(mod, params)
 	case "back":
+		if m.primerRequired {
+			m.currentView = viewSetup
+			m.setCommandWarn("primer completion required before leaving setup")
+			return m, nil
+		}
 		m.enterMenuView()
 		m.setCommandOK("route: menu")
 	case "quit", "exit":

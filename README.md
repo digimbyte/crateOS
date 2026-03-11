@@ -198,7 +198,7 @@ Expected outputs in `dist/`:
 * `dist/crateos-<version>.qcow2`
 * `dist/seed-<version>.iso`
 `.deb` outputs are image-pipeline build artifacts used for provisioning, not a standalone operator install surface.
-If operator state is ever lost after install, recover it with `crateos bootstrap <name>` from the local machine.
+If operator state is ever lost after install, the local console should route into the CrateOS primer; `crateos bootstrap <name>` remains the manual local recovery path when users are missing.
 
 ### 2) Install path vs test/update paths
 
@@ -253,6 +253,7 @@ Confirm `/etc/ssh/sshd_config.d/10-crateos.conf` exists and includes:
 * ISO and qcow2 both derive shared seed identity defaults (hostname, default user, password hash) from `images/common/seed-defaults.env`.
 * The installer identity user is promoted into `/srv/crateos/config/users.yaml` as the initial CrateOS admin rather than relying on a separate hardcoded framework account.
 * Local console takeover is an image contract: `tty1` autologins the seeded operator, that operator uses `/usr/local/bin/crateos-login-shell`, and the login shell `exec`s `crateos console` instead of landing in raw bash.
+* When local first-use/runtime state is incomplete, `crateos console` stays inside a locked CrateOS primer manager instead of failing out to a shell or presenting the normal menu as if the machine were ready; that primer now persists machine identity in `crateos.yaml`, repairs local takeover artifacts, and provisions the first admin locally.
 * `crateos-policy.timer` now refreshes the canonical readiness report on a 2-minute cadence after boot; installed-host verification treats that report as stale after 3 minutes.
 * Run one-command verification on installed host:
 
