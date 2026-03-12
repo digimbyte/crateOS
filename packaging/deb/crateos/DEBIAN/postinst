@@ -20,6 +20,7 @@ EOF
 chmod 0644 /etc/ssh/sshd_config.d/10-crateos.conf 2>/dev/null || true
 chmod 0755 /usr/local/bin/crateos-login-shell 2>/dev/null || true
 chmod 0755 /usr/local/bin/crateos-shell-wrapper 2>/dev/null || true
+chmod 0644 /etc/profile.d/10-crateos-tty1.sh 2>/dev/null || true
 disable_stock_motd_script /etc/update-motd.d/50-landscape-sysinfo
 disable_stock_motd_script /etc/update-motd.d/50-motd-news
 disable_stock_motd_script /etc/update-motd.d/80-livepatch

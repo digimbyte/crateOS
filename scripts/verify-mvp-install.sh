@@ -110,10 +110,10 @@ else
   fail "crateos login shell is not executable"
 fi
 require_file "/etc/systemd/system/getty@tty1.service.d/override.conf" "tty1 override exists"
-if grep -q -- '--autologin' /etc/systemd/system/getty@tty1.service.d/override.conf; then
-  pass "tty1 autologin override is configured for CrateOS takeover"
+if grep -q -- 'agetty --noclear' /etc/systemd/system/getty@tty1.service.d/override.conf; then
+  pass "tty1 override preserves a visible local login surface"
 else
-  fail "tty1 autologin override is missing CrateOS takeover settings"
+  fail "tty1 override does not preserve a visible local login surface"
 fi
 require_file "/etc/os-release" "os-release exists"
 if grep -q '^NAME="CrateOS"$' /etc/os-release; then
@@ -186,10 +186,10 @@ if [[ -n "$installer_user" ]]; then
   else
     fail "initial CrateOS operator shell is not forced through crateos-login-shell"
   fi
-  if grep -q -- "--autologin ${installer_user}" /etc/systemd/system/getty@tty1.service.d/override.conf; then
-    pass "tty1 override autologins the initial CrateOS operator"
+  if grep -q -- 'agetty --noclear' /etc/systemd/system/getty@tty1.service.d/override.conf; then
+    pass "tty1 override keeps the initial CrateOS operator login prompt visible"
   else
-    fail "tty1 override does not autologin the initial CrateOS operator"
+    fail "tty1 override does not keep the initial CrateOS operator login prompt visible"
   fi
 else
   fail "could not determine initial CrateOS operator from users.yaml"

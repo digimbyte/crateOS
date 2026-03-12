@@ -13,6 +13,7 @@ DIST="${REPO_ROOT}/dist"
 COMMON_DIR="${REPO_ROOT}/images/common"
 SEED_DEFAULTS="${COMMON_DIR}/seed-defaults-rpi0.env"
 FETCH_CACHE="${COMMON_DIR}/fetch-cache.sh"
+NORMALIZE_LINUX_PAYLOADS="${COMMON_DIR}/normalize-linux-payloads.py"
 
 VERSION="${VERSION:-0.1.0+rpi0-1}"
 RPI_OS_URL="${RPI_OS_URL:-https://downloads.raspberrypi.com/raspios_arm64/images/raspios_arm64-2024-03-15/2024-03-15-raspios-bookworm-arm64-lite.img.xz}"
@@ -39,7 +40,12 @@ if [ ! -f "${FETCH_CACHE}" ]; then
     echo "ERROR: cache helper not found: ${FETCH_CACHE}"
     exit 1
 fi
+if [ ! -f "${NORMALIZE_LINUX_PAYLOADS}" ]; then
+    echo "ERROR: LF normalization helper not found: ${NORMALIZE_LINUX_PAYLOADS}"
+    exit 1
+fi
 
+python3 "${NORMALIZE_LINUX_PAYLOADS}"
 # shellcheck disable=SC1090
 source "${SEED_DEFAULTS}"
 
@@ -153,21 +159,18 @@ dpkg -i *.deb || apt-get install -f -y
 echo "==> Setting up default user..."
 /root/create-user.sh
 
-echo "==> Enforcing CrateOS local console takeover..."
-test -x /usr/local/bin/crateos-login-shell
-usermod -s /usr/local/bin/crateos-login-shell "${DEFAULT_USER}"
-getent passwd "${DEFAULT_USER}" | grep ':/usr/local/bin/crateos-login-shell$'
-mkdir -p /etc/systemd/system/getty@tty1.service.d
-cat > /etc/systemd/system/getty@tty1.service.d/override.conf <<EOF
-[Service]
-ExecStart=
-ExecStart=-/sbin/agetty --noissue --autologin ${DEFAULT_USER} %I \$TERM
-Type=idle
-EOF
-chmod 0644 /etc/systemd/system/getty@tty1.service.d/override.conf
-grep -q -- '--autologin ${DEFAULT_USER}' /etc/systemd/system/getty@tty1.service.d/override.conf
-chmod 0755 /usr/local/bin/crateos-login-shell
-systemctl daemon-reload || true
+DEFAULT_USER="${DEFAULT_USER}" python3 - <<'PY'
+import os
+from pathlib import Path
+
+users_path = Path("/srv/crateos/config/users.yaml")
+content = users_path.read_text(encoding="utf-8")
+default_user = os.environ["DEFAULT_USER"]
+content = content.replace("users: []", f'users:\n  - name: "{default_user}"\n    role: "admin"', 1)
+users_path.write_text(content, encoding="utf-8")
+PY
+echo "==> Repairing shared CrateOS install contract..."
+/usr/local/bin/crateos repair-install-contract "${DEFAULT_USER}"
 systemctl restart getty@tty1.service || true
 /usr/local/bin/verify-bootstrap-artifacts
 

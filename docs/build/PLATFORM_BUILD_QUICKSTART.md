@@ -106,11 +106,12 @@ CrateOS/
 │   │   ├── seed-defaults-rpi0.env    # RPi Zero 2 overrides
 │   │   └── render-required-packages.sh
 │   │
-│   ├── x86/                          # x86-64 builds
-│   │   ├── build.sh                  # ISO builder
-│   │   └── autoinstall/
-│   │       ├── user-data.template
-│   │       └── meta-data
+│   ├── iso/                          # Shared x86 ISO pipeline
+│   │   ├── build.sh                  # Canonical unpack -> patch -> repack ISO builder
+│   │   ├── autoinstall/
+│   │   │   ├── user-data.template
+│   │   │   └── meta-data
+│   │   └── overlay/
 │   │
 │   ├── rpi/                          # Raspberry Pi 4/5 builds
 │   │   ├── build.sh                  # RPi OS image builder

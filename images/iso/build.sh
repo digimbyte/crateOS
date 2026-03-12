@@ -13,6 +13,8 @@ DIST="${REPO_ROOT}/dist"
 COMMON_DIR="${REPO_ROOT}/images/common"
 SEED_DEFAULTS="${COMMON_DIR}/seed-defaults.env"
 OVERLAY_DIR="${SCRIPT_DIR}/overlay"
+FETCH_CACHE="${COMMON_DIR}/fetch-cache.sh"
+NORMALIZE_LINUX_PAYLOADS="${COMMON_DIR}/normalize-linux-payloads.py"
 
 VERSION="${VERSION:-0.1.0-dev}"
 UBUNTU_RELEASES_INDEX="${UBUNTU_RELEASES_INDEX:-https://releases.ubuntu.com/noble/}"
@@ -48,6 +50,14 @@ if [ ! -f "${SEED_DEFAULTS}" ]; then
     echo "ERROR: seed defaults file not found: ${SEED_DEFAULTS}"
     exit 1
 fi
+if [ ! -f "${FETCH_CACHE}" ]; then
+    echo "ERROR: cache helper not found: ${FETCH_CACHE}"
+    exit 1
+fi
+if [ ! -f "${NORMALIZE_LINUX_PAYLOADS}" ]; then
+    echo "ERROR: LF normalization helper not found: ${NORMALIZE_LINUX_PAYLOADS}"
+    exit 1
+fi
 if [ ! -f "${OVERLAY_DIR}/usr/local/bin/crateos-login-shell" ]; then
     echo "ERROR: missing CrateOS login shell overlay: ${OVERLAY_DIR}/usr/local/bin/crateos-login-shell"
     exit 1
@@ -57,15 +67,17 @@ if [ ! -f "${OVERLAY_DIR}/etc/systemd/system/getty@tty1.service.d/override.conf.
     exit 1
 fi
 
+echo "==> Normalizing Linux payload line endings..."
+python3 "${NORMALIZE_LINUX_PAYLOADS}"
 # shellcheck disable=SC1090
 source "${SEED_DEFAULTS}"
+HOSTNAME="$(printf '%s' "${HOSTNAME}" | tr -d '\r')"
+DEFAULT_USER="$(printf '%s' "${DEFAULT_USER}" | tr -d '\r')"
+DEFAULT_PASSWORD="$(printf '%s' "${DEFAULT_PASSWORD}" | tr -d '\r')"
+PASSWORD_HASH="$(printf '%s' "${PASSWORD_HASH}" | tr -d '\r')"
 
 # --- Download base ISO if not cached ---
-mkdir -p "${DIST}/cache"
-if [ ! -f "${DIST}/cache/${UBUNTU_ISO_NAME}" ]; then
-    echo "==> Downloading base Ubuntu ISO..."
-    wget -q --show-progress -O "${DIST}/cache/${UBUNTU_ISO_NAME}" "${UBUNTU_ISO_URL}"
-fi
+BASE_ISO_PATH="$(bash "${FETCH_CACHE}" "iso" "${UBUNTU_ISO_URL}" "base Ubuntu ISO")"
 
 # --- Extract ISO ---
 WORK="${DIST}/iso-work"
@@ -73,7 +85,7 @@ rm -rf "${WORK}"
 mkdir -p "${WORK}/source"
 
 echo "==> Extracting base ISO..."
-7z x -o"${WORK}/source" "${DIST}/cache/${UBUNTU_ISO_NAME}" > /dev/null
+7z x -o"${WORK}/source" "${BASE_ISO_PATH}" > /dev/null
 
 # --- Inject autoinstall ---
 REQUIRED_PACKAGES="$(bash "${COMMON_DIR}/render-required-packages.sh" "    ")"
@@ -93,16 +105,28 @@ template_path = Path(os.environ["USER_DATA_TEMPLATE"])
 output_path = Path(os.environ["RENDERED_USER_DATA"])
 
 content = template_path.read_text(encoding="utf-8")
-content = content.replace("__REQUIRED_PACKAGES__", os.environ["REQUIRED_PACKAGES"])
-content = content.replace("__HOSTNAME__", os.environ["HOSTNAME"])
-content = content.replace("__DEFAULT_USER__", os.environ["DEFAULT_USER"])
-content = content.replace("__DEFAULT_PASSWORD__", os.environ["DEFAULT_PASSWORD"])
-content = content.replace("__PASSWORD_HASH__", os.environ["PASSWORD_HASH"])
-output_path.write_text(content, encoding="utf-8")
+required_packages = os.environ["REQUIRED_PACKAGES"].replace("\r", "")
+hostname = os.environ["HOSTNAME"].replace("\r", "")
+default_user = os.environ["DEFAULT_USER"].replace("\r", "")
+default_password = os.environ["DEFAULT_PASSWORD"].replace("\r", "")
+password_hash = os.environ["PASSWORD_HASH"].replace("\r", "")
+content = content.replace("__REQUIRED_PACKAGES__", required_packages)
+content = content.replace("__HOSTNAME__", hostname)
+content = content.replace("__DEFAULT_USER__", default_user)
+content = content.replace("__DEFAULT_PASSWORD__", default_password)
+content = content.replace("__PASSWORD_HASH__", password_hash)
+output_path.write_text(content, encoding="utf-8", newline="\n")
 PY
 mkdir -p "${WORK}/source/nocloud"
 cp "${RENDERED_USER_DATA}" "${WORK}/source/nocloud/user-data"
-cp "${SCRIPT_DIR}/autoinstall/meta-data" "${WORK}/source/nocloud/meta-data"
+python3 - "${SCRIPT_DIR}/autoinstall/meta-data" "${WORK}/source/nocloud/meta-data" <<'PY'
+from pathlib import Path
+import sys
+
+source = Path(sys.argv[1])
+target = Path(sys.argv[2])
+target.write_text(source.read_text(encoding="utf-8").replace("\r", ""), encoding="utf-8", newline="\n")
+PY
 
 # --- Inject installer overlay takeover payload ---
 if [ -d "${OVERLAY_DIR}" ]; then
@@ -150,64 +174,28 @@ if [ ! -d "${WORK}/source/casper" ]; then
     exit 1
 fi
 
-# Override operator-facing installer and boot branding across GRUB assets while preserving
-# a clear unattended/autoinstall path on the media.
+# Preserve upstream Ubuntu installer-facing metadata so hypervisors and installer tooling
+# continue to recognize the media as unattended-capable Ubuntu Server, while still forcing
+# our own nocloud autoinstall path via kernel cmdline.
 WORK_SOURCE="${WORK}/source" python3 <<'PY'
 import os
 import re
 from pathlib import Path
 
 root = Path(os.environ["WORK_SOURCE"])
-replacements = [
-    ("Unattended Installation", "Unattended CrateOS Installation"),
-    ("Automated install", "Automated CrateOS install"),
-    ("Try or Install Ubuntu Server", "Install CrateOS"),
-    ("Install Ubuntu Server", "Install CrateOS"),
-    ("Try Ubuntu Server", "Install CrateOS"),
-    ("Ubuntu Server", "CrateOS"),
-    ("Try or Install", "Install"),
-    ("Ubuntu", "CrateOS"),
-]
-
 for path in (root / "boot" / "grub").glob("*.cfg"):
     content = path.read_text(encoding="utf-8", errors="ignore")
-    updated = content
-    for old, new in replacements:
-        updated = updated.replace(old, new)
     updated = re.sub(
-        r'(^[ \t]*linux[^\n]*)(?<!autoinstall)(?=\s+---|\s*$)',
-        r'\1 autoinstall ds=nocloud;s=/cdrom/nocloud/',
-        updated,
+        r'(^[ \t]*linux[^\n]*?)(\s+---(?:\s|$))',
+        lambda match: match.group(0)
+        if "autoinstall" in match.group(1)
+        else f'{match.group(1)} autoinstall ds=nocloud\\;s=/cdrom/nocloud/{match.group(2)}',
+        content,
         flags=re.MULTILINE,
     )
     if updated != content:
         path.write_text(updated, encoding="utf-8")
 PY
-
-if [ -f "${WORK}/source/.disk/info" ]; then
-    printf 'CrateOS %s LTS - Release amd64\n' "${VERSION}" > "${WORK}/source/.disk/info"
-fi
-
-if [ -f "${WORK}/source/casper/install-sources.yaml" ]; then
-    INSTALL_SOURCES_PATH="${WORK}/source/casper/install-sources.yaml" python3 <<'PY'
-import os
-from pathlib import Path
-
-path = Path(os.environ["INSTALL_SOURCES_PATH"])
-content = path.read_text(encoding="utf-8", errors="ignore")
-replacements = [
-    ("Ubuntu Server (minimized)", "Crate + Ubuntu Server (minimized)"),
-    ("Ubuntu Server", "Crate + Ubuntu Server"),
-    ("The default install contains a curated set of packages for server use.", "CrateOS layers its control surface on the standard Ubuntu Server base."),
-    ("This version has been customized to have a small runtime footprint and does not include support for many common interactive features.", "This variant keeps the CrateOS control surface on a smaller Ubuntu Server base."),
-]
-updated = content
-for old, new in replacements:
-    updated = updated.replace(old, new)
-if updated != content:
-    path.write_text(updated, encoding="utf-8")
-PY
-fi
 
 # Refresh ISO checksums after mutating media contents.
 if [ -f "${WORK}/source/md5sum.txt" ]; then
@@ -223,7 +211,7 @@ fi
 
 # Replay the source ISO boot metadata rather than assuming an older isolinux layout.
 BOOT_OPTS="$(
-    xorriso -indev "${DIST}/cache/${UBUNTU_ISO_NAME}" \
+    xorriso -indev "${BASE_ISO_PATH}" \
         -report_el_torito as_mkisofs \
         -report_system_area as_mkisofs 2>/dev/null \
         | awk 'BEGIN { ORS=" " } /^[[:space:]]*-/ { sub(/^[[:space:]]+/, ""); printf "%s", $0 " " }'
@@ -233,6 +221,20 @@ if [ -z "${BOOT_OPTS// }" ]; then
     exit 1
 fi
 
+filter_xorriso_progress() {
+    awk '
+        /xorriso : UPDATE :/ {
+            count++
+            if (count % 20 == 1) {
+                print
+                fflush()
+            }
+            next
+        }
+        { print; fflush() }
+    '
+}
+
 # --- Rebuild ISO ---
 OUTPUT="${DIST}/crateos-${VERSION}.iso"
 echo "==> Rebuilding ISO → ${OUTPUT}"
@@ -241,7 +243,12 @@ eval "xorriso -as mkisofs \
   -o \"${OUTPUT}\" \
   -J -joliet-long -cache-inodes \
   ${BOOT_OPTS} \
-  \"${WORK}/source\""
+  \"${WORK}/source\"" 2>&1 | filter_xorriso_progress
+
+pipe_status=("${PIPESTATUS[@]}")
+if [ "${pipe_status[0]}" -ne 0 ]; then
+    exit "${pipe_status[0]}"
+fi
 
 echo "==> ISO ready at ${OUTPUT}"
 exit 0

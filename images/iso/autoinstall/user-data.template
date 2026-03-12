@@ -57,14 +57,7 @@ __REQUIRED_PACKAGES__
       content = content.replace("users: []", "users:\n  - name: \"__DEFAULT_USER__\"\n    role: \"admin\"", 1)
       users_path.write_text(content, encoding="utf-8")
       PY
-      install -d /target/usr/local/bin
-      install -d /target/etc/systemd/system/getty@tty1.service.d
-      cp /cdrom/overlay/usr/local/bin/crateos-login-shell /target/usr/local/bin/crateos-login-shell
-      cp /cdrom/overlay/etc/systemd/system/getty@tty1.service.d/override.conf /target/etc/systemd/system/getty@tty1.service.d/override.conf
-      chmod 0755 /target/usr/local/bin/crateos-login-shell
-      curtin in-target -- usermod -s /usr/local/bin/crateos-login-shell __DEFAULT_USER__
-      test -x /target/usr/local/bin/crateos-login-shell
-      test -f /target/etc/systemd/system/getty@tty1.service.d/override.conf
+      curtin in-target -- /usr/local/bin/crateos repair-install-contract __DEFAULT_USER__
       curtin in-target -- test -x /usr/local/bin/crateos
       curtin in-target -- test -x /usr/local/bin/crateos-login-shell
       curtin in-target -- sh -c "getent passwd __DEFAULT_USER__ | grep ':/usr/local/bin/crateos-login-shell$'"

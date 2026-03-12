@@ -12,6 +12,7 @@ DIST="${REPO_ROOT}/dist"
 COMMON_DIR="${REPO_ROOT}/images/common"
 SEED_DEFAULTS="${COMMON_DIR}/seed-defaults.env"
 FETCH_CACHE="${COMMON_DIR}/fetch-cache.sh"
+NORMALIZE_LINUX_PAYLOADS="${COMMON_DIR}/normalize-linux-payloads.py"
 
 VERSION="${VERSION:-0.1.0-dev}"
 CLOUD_IMG_URL="${CLOUD_IMG_URL:-https://cloud-images.ubuntu.com/noble/current/noble-server-cloudimg-amd64.img}"
@@ -36,7 +37,12 @@ if [ ! -f "${FETCH_CACHE}" ]; then
     echo "ERROR: cache helper not found: ${FETCH_CACHE}"
     exit 1
 fi
+if [ ! -f "${NORMALIZE_LINUX_PAYLOADS}" ]; then
+    echo "ERROR: LF normalization helper not found: ${NORMALIZE_LINUX_PAYLOADS}"
+    exit 1
+fi
 
+python3 "${NORMALIZE_LINUX_PAYLOADS}"
 # shellcheck disable=SC1090
 source "${SEED_DEFAULTS}"
 

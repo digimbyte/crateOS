@@ -42,6 +42,7 @@ Contents:
 - Renders shared seed identity defaults from `images/common/seed-defaults.env`
 - Renders required package list from `packaging/config/packages.yaml`
 - Injects autoinstall seed under `nocloud/` (`user-data`, `meta-data`)
+- Uses the shared `images/iso/build.sh` lane for x86 so the ISO path stays the canonical unpack → patch → repack flow
 - Ensures kernel cmdline has `autoinstall ds=nocloud;s=/cdrom/nocloud/`
 - Embeds CrateOS debs under `crateos-debs/` (required for this installer)
 - Regenerates `md5sum.txt` after media mutation
@@ -53,6 +54,11 @@ Contents:
 - Build deb → qcow2 → ISO
 - Upload artifacts + checksums to GitHub Releases
 - Baseline: Ubuntu 24.04 (noble) `amd64`
+
+## Windows orchestration contract
+- General target flow should remain: build → WSL → build code → get image → unpack image → patch files → pack image/ISO
+- Target-specific differences should stay at base-image selection and config/package inputs, not by forking the patch pipeline itself
+- Shared install-contract mutations (console takeover, seeded operator shell, visible tty1 login surface, identity repair) must come from the common CrateOS repair path instead of target-specific one-off patch blocks
 
 ## Installable MVP acceptance contract
 - `make build` outputs `dist/bin/{crateos,crateos-agent,crateos-policy}`
@@ -66,7 +72,7 @@ Contents:
   - `/srv/crateos/state/installed.json` present
   - seeded configs under `/srv/crateos/config/`
   - SSH forced into `/usr/local/bin/crateos console`
-  - `tty1` autologin targeting the seeded operator
+  - `tty1` shows a visible login prompt instead of a blank console
   - seeded operator shell set to `/usr/local/bin/crateos-login-shell`
 - Readiness freshness contract:
   - `crateos-policy.timer` refreshes `readiness-report.json` every 2 minutes after boot

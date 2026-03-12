@@ -14,6 +14,20 @@ type ContractCheck struct {
 	Details string
 }
 
+func shellMatches(username string) bool {
+	passwdData, err := os.ReadFile("/etc/passwd")
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(passwdData), "\n") {
+		fields := strings.Split(line, ":")
+		if len(fields) >= 7 && strings.TrimSpace(fields[0]) == username {
+			return strings.TrimSpace(fields[6]) == LoginShellPath
+		}
+	}
+	return false
+}
+
 const (
 	LoginShellPath = "/usr/local/bin/crateos-login-shell"
 	loginShellBody = "#!/bin/bash\nCURRENT_USER=\"${USER:-$(id -un 2>/dev/null || printf '%s' 'crate')}\"\nCURRENT_HOME=\"${HOME:-$(getent passwd \"${CURRENT_USER}\" 2>/dev/null | cut -d: -f6)}\"\n\nexport TERM=\"${TERM:-linux}\"\nexport USER=\"${CURRENT_USER}\"\nexport LOGNAME=\"${LOGNAME:-${CURRENT_USER}}\"\nexport HOME=\"${CURRENT_HOME:-/home/${CURRENT_USER}}\"\n\nexec /usr/local/bin/crateos console\n"
@@ -40,13 +54,35 @@ func EnsureLoginShell() error {
 	return os.Chmod(LoginShellPath, 0755)
 }
 
+func EnsureUserShell(username string) error {
+	username = strings.TrimSpace(username)
+	if username == "" {
+		return nil
+	}
+	if shellMatches(username) {
+		return nil
+	}
+	if err := exec.Command("usermod", "-s", LoginShellPath, username).Run(); err == nil {
+		if shellMatches(username) {
+			return nil
+		}
+	}
+	if _, err := exec.LookPath("chsh"); err == nil {
+		if err := exec.Command("chsh", "-s", LoginShellPath, username).Run(); err == nil {
+			if shellMatches(username) {
+				return nil
+			}
+		}
+	}
+	return fmt.Errorf("failed to enforce %s as login shell for %s", LoginShellPath, username)
+}
+
 func TTYOverridePath() string {
 	return ttyOverridePath
 }
 
-func RenderTTYOverride(username string) string {
-	username = strings.TrimSpace(username)
-	return fmt.Sprintf("[Service]\nExecStart=\nExecStart=-/sbin/agetty --noissue --autologin %s %%I $TERM\nType=idle\n", username)
+func RenderTTYOverride(_ string) string {
+	return fmt.Sprintf("[Service]\nExecStart=\nExecStart=-/sbin/agetty --noclear %%I $TERM\nType=idle\n")
 }
 
 func EnsureTTYOverride(username string) error {
@@ -103,6 +139,9 @@ func RepairLocalConsoleContract(username string) error {
 	}
 	username = strings.TrimSpace(username)
 	if username != "" {
+		if err := EnsureUserShell(username); err != nil {
+			return err
+		}
 		if err := EnsureTTYOverride(username); err != nil {
 			return err
 		}
@@ -156,17 +195,7 @@ func EvaluateLocalInstallContract(username string) []ContractCheck {
 	}
 	username = strings.TrimSpace(username)
 	if username != "" {
-		provisioned := false
-		passwdData, err := os.ReadFile("/etc/passwd")
-		if err == nil {
-			for _, line := range strings.Split(string(passwdData), "\n") {
-				fields := strings.Split(line, ":")
-				if len(fields) >= 7 && strings.TrimSpace(fields[0]) == username {
-					provisioned = strings.TrimSpace(fields[6]) == LoginShellPath
-					break
-				}
-			}
-		}
+		provisioned := shellMatches(username)
 		if provisioned {
 			checks = append(checks, ContractCheck{Label: "Provisioned operator account", OK: true, Details: username + " uses crateos-login-shell"})
 		} else {

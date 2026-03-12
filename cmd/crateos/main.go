@@ -13,6 +13,7 @@ import (
 
 	"github.com/crateos/crateos/internal/platform"
 	"github.com/crateos/crateos/internal/sysinfo"
+	"github.com/crateos/crateos/internal/takeover"
 	"github.com/crateos/crateos/internal/tui"
 )
 
@@ -29,6 +30,8 @@ func main() {
 			printStatus()
 		case "bootstrap":
 			handleBootstrapCmd(os.Args[2:])
+		case "repair-install-contract":
+			handleRepairInstallContractCmd(os.Args[2:])
 		case "service":
 			handleServiceCmd(os.Args[2:])
 		case "user":
@@ -53,6 +56,7 @@ func printUsage() {
 	fmt.Println("  crateos status    Show system status summary")
 	fmt.Println("  crateos version   Print version information")
 	fmt.Println("  crateos bootstrap <name>                Create the first admin for primer recovery when users are missing")
+	fmt.Println("  crateos repair-install-contract [name]  Repair the local console/install contract for the named operator")
 	fmt.Println("  crateos service enable|disable|start|stop <name>   Manage services")
 	fmt.Println("  crateos user add <name> <role>          Add a user with role")
 	fmt.Println("  crateos user del <name>                 Delete a user")
@@ -138,6 +142,21 @@ func handleBootstrapCmd(args []string) {
 		os.Exit(1)
 	}
 	fmt.Println("bootstrap complete")
+}
+
+func handleRepairInstallContractCmd(args []string) {
+	username := ""
+	if len(args) > 0 {
+		username = strings.TrimSpace(args[0])
+	}
+	if username == "" {
+		username = resolveCLIUser()
+	}
+	if err := takeover.RepairLocalInstallContract(username); err != nil {
+		fmt.Fprintf(os.Stderr, "repair-install-contract failed: %v\n", err)
+		os.Exit(1)
+	}
+	fmt.Println("repair-install-contract complete")
 }
 func handleBackupCmd(args []string) {
 	if runtime.GOOS != "linux" {

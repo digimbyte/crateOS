@@ -1,11 +1,15 @@
 param(
     [Parameter(Position=0)]
-    [ValidateSet("prompt","all","deb","deb-x86","deb-rpi","deb-rpi0","iso","image-x86","image-rpi","image-rpi0","qcow2","rpi","clean","help","check")]
+    [ValidateSet("prompt","all","deb","deb-x86","deb-rpi","deb-rpi0","image","iso","image-x86","image-rpi","image-rpi0","qcow2","rpi","clean","help","check")]
     [string]$Target = "prompt",
     
     [Parameter()]
     [ValidateSet("x86", "rpi", "rpi0")]
-    [string]$Platform = "x86"
+    [string]$Platform = "x86",
+
+    [Parameter()]
+    [ValidateSet("iso","img","qcow2")]
+    [string]$Format
 )
 
 $ErrorActionPreference = "Stop"
@@ -31,6 +35,42 @@ function Set-PlatformState {
     }
 
     $script:Version = if ($env:VERSION) { $env:VERSION } else { $script:VersionDefault }
+}
+
+function Get-DefaultImageFormat {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("x86", "rpi", "rpi0")]
+        [string]$PlatformName
+    )
+
+    switch ($PlatformName) {
+        "x86"  { return "iso" }
+        "rpi"  { return "img" }
+        "rpi0" { return "img" }
+    }
+}
+
+function Resolve-ImageMakeTarget {
+    param(
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("x86", "rpi", "rpi0")]
+        [string]$PlatformName,
+
+        [Parameter()]
+        [string]$ImageFormat
+    )
+
+    $resolvedFormat = if ([string]::IsNullOrWhiteSpace($ImageFormat)) { Get-DefaultImageFormat -PlatformName $PlatformName } else { $ImageFormat }
+    switch ("${PlatformName}:$resolvedFormat") {
+        "x86:iso"  { return @{ MakeTarget = "image-x86"; Format = "iso"; Label = "ISO image" } }
+        "x86:qcow2" { return @{ MakeTarget = "qcow2"; Format = "qcow2"; Label = "QCOW2 image" } }
+        "rpi:img"  { return @{ MakeTarget = "image-rpi"; Format = "img"; Label = "Raspberry Pi image" } }
+        "rpi0:img" { return @{ MakeTarget = "image-rpi0"; Format = "img"; Label = "Raspberry Pi Zero 2 image" } }
+        default {
+            Write-Error "Unsupported image format '$resolvedFormat' for platform '$PlatformName'"
+        }
+    }
 }
 
 Set-PlatformState -PlatformName $Platform
@@ -560,30 +600,20 @@ function Invoke-Deb {
     Invoke-WslMakeTarget $target
 }
 
-function Invoke-Iso {
+function Invoke-Image {
     if (-not (Test-Prerequisites -Level all)) {
         exit 1
     }
-    if ($Platform -ne "x86") {
-        Write-Error 'ISO images are x86-only. Use: . \build.ps1 -Platform x86 image-x86'
-        exit 1
-    }
-    Write-Banner "Building ISO image"
-    Write-Step "Platform: x86"
-    Invoke-WslMakeTarget "image-x86"
+    $resolved = Resolve-ImageMakeTarget -PlatformName $Platform -ImageFormat $Format
+    Write-Banner "Building $($resolved.Label)"
+    Write-Step "Platform: $Platform"
+    Write-Step "Format: $($resolved.Format)"
+    Invoke-WslMakeTarget $resolved.MakeTarget
 }
 
 function Invoke-Qcow2 {
-    if (-not (Test-Prerequisites -Level all)) {
-        exit 1
-    }
-    if ($Platform -ne "x86") {
-        Write-Error 'QCOW2 images are x86-only. Use: . \build.ps1 -Platform x86 qcow2'
-        exit 1
-    }
-    Write-Banner "Building QCOW2 image"
-    Write-Step "Platform: x86"
-    Invoke-WslMakeTarget "qcow2"
+    $Format = "qcow2"
+    Invoke-Image
 }
 
 function Invoke-Rpi {
@@ -664,19 +694,19 @@ function Invoke-All {
         
         switch ($platform) {
             "x86" {
-                Build-Platform "x86" "deb-x86" "image-x86"
+                Build-Platform "x86" "deb-x86" "image-x86" "iso"
                 if ($LASTEXITCODE -eq 0) {
                     $buildResults += @{Platform="x86"; Status="Success"; Image="dist/crateos-0.1.0+noble1.iso"; FlashTool="Rufus/balena-etcher"; Device="USB drive"}
                 }
             }
             "rpi" {
-                Build-Platform "rpi" "deb-rpi" "image-rpi"
+                Build-Platform "rpi" "deb-rpi" "image-rpi" "img"
                 if ($LASTEXITCODE -eq 0) {
                     $buildResults += @{Platform="rpi"; Status="Success"; Image="dist/crateos-rpi-0.1.0+rpi1.img"; FlashTool="balena-etcher/dd"; Device="microSD card"}
                 }
             }
             "rpi0" {
-                Build-Platform "rpi0" "deb-rpi0" "image-rpi0"
+                Build-Platform "rpi0" "deb-rpi0" "image-rpi0" "img"
                 if ($LASTEXITCODE -eq 0) {
                     $buildResults += @{Platform="rpi0"; Status="Success"; Image="dist/crateos-rpi0-0.1.0+rpi0-1.img"; FlashTool="balena-etcher/dd"; Device="microSD card"}
                 }
@@ -780,7 +810,10 @@ function Build-Platform {
         [string]$DebTarget,
         
         [Parameter(Mandatory=$true)]
-        [string]$ImageTarget
+        [string]$ImageTarget,
+
+        [Parameter(Mandatory=$true)]
+        [string]$ImageFormat
     )
     
     # Set global platform variables
@@ -792,6 +825,7 @@ function Build-Platform {
     Invoke-WslMakeTarget $DebTarget
     if ($LASTEXITCODE -ne 0) { return }
     
+    $script:Format = $ImageFormat
     Invoke-WslMakeTarget $ImageTarget
     if ($LASTEXITCODE -ne 0) { return }
 }
@@ -805,9 +839,10 @@ function Invoke-Help {
     Write-Host "  all     Build all platforms (x86, rpi, rpi0)"
     Write-Host "  check   Verify all prerequisites are installed"
     Write-Host "  deb     Build .deb packages via WSL2"
+    Write-Host "  image   Build final image for -Platform/-Format via WSL2"
     Write-Host "  iso     Build autoinstall ISO via WSL2"
     Write-Host "  qcow2   Build VM image via WSL2"
-    Write-Host "  rpi     Build Pi image (stub)"
+    Write-Host "  rpi     Build Pi image via WSL2"
     Write-Host "  clean   Remove dist/"
     Write-Host "  help    Show this message"
     Write-Host ""
@@ -815,6 +850,7 @@ function Invoke-Help {
     Write-Host '  . \build.ps1 all           # Build everything (all platforms)'
     Write-Host '  . \build.ps1 check         # Verify system is ready'
     Write-Host '  . \build.ps1 deb           # Create .deb packages (requires WSL2)'
+    Write-Host '  . \build.ps1 image -Platform x86 -Format qcow2'
     Write-Host '  . \build.ps1 iso           # Build bootable ISO (requires WSL2)'
     Write-Host ""
     Write-Host "Prerequisites:"
@@ -872,12 +908,13 @@ switch ($Target) {
     "deb-x86"       { Set-PlatformState -PlatformName "x86"; Invoke-Deb }
     "deb-rpi"       { Set-PlatformState -PlatformName "rpi"; Invoke-Deb }
     "deb-rpi0"      { Set-PlatformState -PlatformName "rpi0"; Invoke-Deb }
-    "iso"           { Invoke-Iso }
-    "image-x86"     { Set-PlatformState -PlatformName "x86"; Invoke-Iso }
-    "image-rpi"     { Set-PlatformState -PlatformName "rpi"; if (-not (Test-Prerequisites -Level all)) { exit 1 }; Invoke-WslMakeTarget "image-rpi" }
-    "image-rpi0"    { Set-PlatformState -PlatformName "rpi0"; if (-not (Test-Prerequisites -Level all)) { exit 1 }; Invoke-WslMakeTarget "image-rpi0" }
+    "image"         { Invoke-Image }
+    "iso"           { Set-PlatformState -PlatformName "x86"; $Format = "iso"; Invoke-Image }
+    "image-x86"     { Set-PlatformState -PlatformName "x86"; $Format = "iso"; Invoke-Image }
+    "image-rpi"     { Set-PlatformState -PlatformName "rpi"; $Format = "img"; Invoke-Image }
+    "image-rpi0"    { Set-PlatformState -PlatformName "rpi0"; $Format = "img"; Invoke-Image }
     "qcow2"         { Invoke-Qcow2 }
-    "rpi"           { Set-PlatformState -PlatformName "rpi"; if (-not (Test-Prerequisites -Level all)) { exit 1 }; Invoke-WslMakeTarget "image-rpi" }
+    "rpi"           { Set-PlatformState -PlatformName "rpi"; $Format = "img"; Invoke-Image }
     "clean"         { Invoke-Clean }
     "help"          { Invoke-Help }
 }

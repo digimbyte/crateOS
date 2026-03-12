@@ -81,11 +81,12 @@ CrateOS/
 │   │   ├── seed-defaults-rpi0.env              # Pi Zero 2 overrides
 │   │   └── render-required-packages.sh         # Shared utilities
 │   │
-│   ├── x86/
-│   │   ├── build.sh                            # Ubuntu ISO builder
-│   │   └── autoinstall/
-│   │       ├── user-data.template
-│   │       └── meta-data
+│   ├── iso/
+│   │   ├── build.sh                            # Shared ISO unpack -> patch -> repack builder for x86 media
+│   │   ├── autoinstall/
+│   │   │   ├── user-data.template
+│   │   │   └── meta-data
+│   │   └── overlay/
 │   │
 │   ├── rpi/
 │   │   ├── build.sh                            # RPi 4/5 image builder
@@ -478,7 +479,7 @@ Each image builder is passed a platform identifier:
 
 ```bash
 # x86 image builder
-images/x86/build.sh
+images/iso/build.sh
     ↓
     Runs: packaging/config/packages-x86.yaml
     Installs: 98 packages (full toolchain + diagnostics)

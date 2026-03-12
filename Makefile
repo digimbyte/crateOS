@@ -2,6 +2,7 @@ VERSION  ?= 0.1.0+noble1
 GOFLAGS  ?= -trimpath
 DIST     := dist
 BIN      := $(DIST)/bin
+IMAGE_FORMAT ?=
 
 # Platform selection (x86, rpi, rpi0)
 PLATFORM ?= x86
@@ -25,7 +26,25 @@ CMDS     := crateos crateos-agent crateos-policy
 DEB_PKGS := crateos crateos-agent crateos-policy
 DEB_ARCH ?= $(GOARCH)
 
-.PHONY: all build build-x86 build-rpi build-rpi0 deb deb-x86 deb-rpi deb-rpi0 iso image-x86 image-rpi image-rpi0 qcow2 rpi clean
+ifeq ($(PLATFORM),x86)
+  DEFAULT_IMAGE_FORMAT := iso
+  IMAGE_BUILDER_iso    := images/iso/build.sh
+  IMAGE_BUILDER_qcow2  := images/qcow2/build.sh
+else ifeq ($(PLATFORM),rpi)
+  DEFAULT_IMAGE_FORMAT := img
+  IMAGE_BUILDER_img    := images/rpi/build.sh
+else ifeq ($(PLATFORM),rpi0)
+  DEFAULT_IMAGE_FORMAT := img
+  IMAGE_BUILDER_img    := images/rpi0/build.sh
+endif
+
+ifeq ($(strip $(IMAGE_FORMAT)),)
+  IMAGE_FORMAT := $(DEFAULT_IMAGE_FORMAT)
+endif
+
+IMAGE_BUILDER := $(IMAGE_BUILDER_$(IMAGE_FORMAT))
+
+.PHONY: all build build-x86 build-rpi build-rpi0 deb deb-x86 deb-rpi deb-rpi0 image image-x86 image-rpi image-rpi0 iso qcow2 rpi clean
 
 all: build
 
@@ -42,6 +61,7 @@ help:
 	@echo "  deb-x86            Build x86 .deb packages"
 	@echo "  deb-rpi            Build Raspberry Pi .deb packages"
 	@echo "  deb-rpi0           Build Raspberry Pi Zero 2 .deb packages"
+	@echo "  image              Build final image for PLATFORM/IMAGE_FORMAT"
 	@echo "  image-x86          Build x86 ISO image"
 	@echo "  image-rpi          Build Raspberry Pi OS image"
 	@echo "  image-rpi0         Build Raspberry Pi Zero 2 OS image"
@@ -50,6 +70,7 @@ help:
 	@echo ""
 	@echo "Examples:"
 	@echo "  make PLATFORM=x86 image-x86"
+	@echo "  make PLATFORM=x86 IMAGE_FORMAT=qcow2 image"
 	@echo "  make PLATFORM=rpi deb-rpi"
 	@echo "  make PLATFORM=rpi0 build-rpi0"
 
@@ -84,6 +105,8 @@ deb-rpi0: PLATFORM := rpi0
 deb-rpi0: deb
 
 package-deb: build
+	@echo "==> normalizing Linux payload line endings"
+	@python3 images/common/normalize-linux-payloads.py
 	@for pkg in $(DEB_PKGS); do \
 		echo "  • packaging $$pkg"; \
 		tmpdir=$$(mktemp -d); \
@@ -126,27 +149,32 @@ package-deb: build
 	@echo "✓ .deb packages written to $(DIST)/"
 
 # ── Image builders (platform-specific) ────────────────────────────────────────────────────
-image-x86: deb-x86
-	@echo "==> building x86 autoinstall ISO"
-	bash images/x86/build.sh
-	@echo "==> ISO written to $(DIST)/"
+image:
+	@if [ -z "$(IMAGE_BUILDER)" ]; then \
+		echo "ERROR: unsupported image format '$(IMAGE_FORMAT)' for platform '$(PLATFORM)'"; \
+		exit 1; \
+	fi
+	@echo "==> building $(PLATFORM) $(IMAGE_FORMAT) image via $(IMAGE_BUILDER)"
+	bash $(IMAGE_BUILDER)
+	@echo "==> image written to $(DIST)/"
+
+image-x86: PLATFORM := x86
+image-x86: IMAGE_FORMAT := iso
+image-x86: deb-x86 image
 
 iso: image-x86
 
-image-rpi: deb-rpi
-	@echo "==> building Raspberry Pi image"
-	bash images/rpi/build.sh
-	@echo "==> RPi image written to $(DIST)/"
+image-rpi: PLATFORM := rpi
+image-rpi: IMAGE_FORMAT := img
+image-rpi: deb-rpi image
 
-image-rpi0: deb-rpi0
-	@echo "==> building Raspberry Pi Zero 2 image"
-	bash images/rpi0/build.sh
-	@echo "==> RPi0 image written to $(DIST)/"
+image-rpi0: PLATFORM := rpi0
+image-rpi0: IMAGE_FORMAT := img
+image-rpi0: deb-rpi0 image
 
-qcow2: deb-x86
-	@echo "==> building qcow2 image"
-	bash images/qcow2/build.sh
-	@echo "==> qcow2 written to $(DIST)/"
+qcow2: PLATFORM := x86
+qcow2: IMAGE_FORMAT := qcow2
+qcow2: deb-x86 image
 
 rpi: image-rpi
 
