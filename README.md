@@ -289,6 +289,8 @@ Treat the installable MVP foundation as complete only when all of the following 
 
 CrateOS is opinionated by design. Contributions that **reduce ambiguity** and **improve determinism** are preferred.
 
+Join our community on Discord: https://discord.gg/yw2jff9jWN
+
 * Open an issue describing:
 
   * the user-facing problem
